@@ -18,7 +18,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import org.json.JSONArray
+import org.json.JSONObject
 import java.io.ByteArrayOutputStream
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import kotlin.io.encoding.ExperimentalEncodingApi
 
 
@@ -136,19 +140,38 @@ class CmWalletApplication : Application() {
         val walletIcon = resources.getDrawable(R.mipmap.ic_launcher, theme).toBitmap()
         val iconBuffer = ByteArrayOutputStream()
         walletIcon.compress(Bitmap.CompressFormat.PNG, 100, iconBuffer)
+        val iconBytes = iconBuffer.toByteArray()
 
-        val data = CredentialRepository.IssuanceRegistryData(
-            icon = iconBuffer.toByteArray(),
-            title = resources.getString(R.string.app_name),
-            subtitle = "Save your document to CMWallet",
-            issuerAllowlist = null
-        )
+        val jsonOffset = 4 + iconBytes.size
 
-        return data.toRegistryDatabase()
+        val matcherDataJson = JSONObject().apply {
+            put("entry_id", "openid4vci")
+            put("icon", JSONArray().apply {
+                put(4)
+                put(jsonOffset)
+            })
+            put("title", resources.getString(R.string.app_name))
+            put("subtitle", "Save your document to CMWallet")
+            put("filter", JSONObject().apply {
+                put("Unit", JSONObject())
+            })
+        }
+
+        val jsonBytes = matcherDataJson.toString().toByteArray()
+
+        val out = ByteArrayOutputStream()
+        val buffer = ByteBuffer.allocate(4)
+        buffer.order(ByteOrder.LITTLE_ENDIAN)
+        buffer.putInt(jsonOffset)
+        out.write(buffer.array())
+        out.write(iconBytes)
+        out.write(jsonBytes)
+
+        return out.toByteArray()
     }
 
     private fun loadIssuanceMatcher(): ByteArray {
-        return readAsset("provision_hardcoded.wasm")
+        return readAsset("openid4vci.wasm")
     }
 
     private fun loadPhoneNumberMatcher(): ByteArray {
