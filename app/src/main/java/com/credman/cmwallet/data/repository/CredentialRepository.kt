@@ -114,48 +114,6 @@ class CredentialRepository {
 
     }
 
-    class IssuanceRegistryData(
-        val icon: ByteArray, // Entry icon for display
-        val title: String, // Entry subtitle for display
-        val subtitle: String?, // Entry subtitle for display
-        val issuerAllowlist: List<String>?,
-    ) {
-        fun toRegistryDatabase(): ByteArray {
-            val out = ByteArrayOutputStream()
-
-            // Write the offset to the json
-            val jsonOffset = 4 + icon.size
-            val buffer = ByteBuffer.allocate(4)
-            buffer.order(ByteOrder.LITTLE_ENDIAN)
-            buffer.putInt(jsonOffset)
-            out.write(buffer.array())
-
-            // Write the icons, currently write just one, being the wallet logo
-            out.write(icon)
-
-            val json = JSONObject().apply {
-                put("display", JSONObject().apply {
-                    put(TITLE, title)
-                    putOpt(SUBTITLE, subtitle)
-                    val iconJson = JSONObject().apply {
-                        put(START, 4)
-                        put(LENGTH, icon.size)
-                    } // Hardcoded for now
-                    put(ICON, iconJson)
-                })
-                if (issuerAllowlist != null) {
-                    val capabilities = JSONObject()
-                    for (iss in issuerAllowlist) {
-                        capabilities.put(iss, JSONObject())
-                    }
-                    put("capabilities", capabilities)
-                }
-            }
-            out.write(json.toString().toByteArray())
-            return out.toByteArray()
-        }
-    }
-
     class RegistryIcon(
         val iconValue: ByteArray,
         var iconOffset: Int = 0
