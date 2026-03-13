@@ -4,6 +4,9 @@ use crate::bindings::{
     AddStringIdEntry, GetCredentialsSize, GetRequestBuffer, GetRequestSize, ReadCredentialsBuffer,
 };
 
+#[cfg(feature = "logging")]
+use crate::bindings::HostLog;
+
 pub trait CredmanApi {
     fn get_request_buffer(&self) -> Vec<u8>;
     fn get_registered_data(&self) -> Vec<u8>;
@@ -16,6 +19,7 @@ pub trait CredmanApi {
         disclaimer: Option<&CStr>,
         warning: Option<&CStr>,
     );
+    fn host_log(&self, msg: &str);
 }
 
 pub struct CredmanApiImpl;
@@ -65,5 +69,17 @@ impl CredmanApi for CredmanApiImpl {
                 warning.map_or(std::ptr::null(), |x| x.as_ptr()),
             );
         }
+    }
+
+    #[cfg(feature = "logging")]
+    fn host_log(&self, msg: &str) {
+        unsafe {
+            HostLog(msg.as_ptr() as *const i8, msg.len() as i32);
+        }
+    }
+
+    #[cfg(not(feature = "logging"))]
+    fn host_log(&self, _msg: &str) {
+        // No-op when logging is disabled
     }
 }

@@ -17,6 +17,10 @@ nanoserde = "0.1"
 [build-dependencies]
 bindgen = "0.72.1"
 
+[features]
+default = []
+logging = []
+
 [profile.release]
 # Tell `rustc` to optimize for small code size.
 opt-level = "s"
