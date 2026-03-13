@@ -16,39 +16,74 @@ const ALLOWED_PROTOCOLS: [&str; 4] = [
 ];
 
 pub fn issuance_main(credman: &mut impl CredmanApi) -> Result<(), Box<dyn std::error::Error>> {
+    credman.host_log("issuance_main started");
     let matcher_data_buffer = credman.get_registered_data();
-    let json_start = u32::from_le_bytes(matcher_data_buffer[..size_of::<u32>()].try_into()?);
-    let matcher_data: IssuanceMatcherData = DeJson::deserialize_json(std::str::from_utf8(
-        &matcher_data_buffer[json_start.try_into()?..],
-    )?)?;
-    let request: DigitalCredentialCreationRequest =
-        DeJson::deserialize_json(std::str::from_utf8(&credman.get_request_buffer())?)?;
-    if request.requests.iter().any(|r| {
-        ALLOWED_PROTOCOLS.iter().any(|s| r.protocol == *s)
-            && matcher_data
-                .filter
-                .matches(&RegularizedOpenId4VciRequestData::from(&r.data))
-    }) {
-        let icon = &matcher_data_buffer[matcher_data.icon.0..matcher_data.icon.1];
-        let entry_id = CString::new(matcher_data.entry_id)?;
-        let title = matcher_data
-            .title
-            .map(|s| CString::new(s))
-            .transpose()?;
-        let subtitle = matcher_data
-            .subtitle
-            .map(|s| CString::new(s))
-            .transpose()?;
-        credman.add_string_id_entry(
-            &entry_id,
-            if icon.is_empty() { None } else { Some(icon) },
-            title.as_deref(),
-            subtitle.as_deref(),
-            None,
-            None,
-        );
+    credman.host_log(&format!(
+        "matcher_data_buffer size: {}",
+        matcher_data_buffer.len()
+    ));
+
+    if matcher_data_buffer.len() < size_of::<u32>() {
+        credman.host_log("matcher_data_buffer too small");
+        return Ok(());
     }
 
+    let json_start = u32::from_le_bytes(matcher_data_buffer[..size_of::<u32>()].try_into()?);
+    credman.host_log(&format!("json_start: {}", json_start));
+
+    let matcher_data_str = std::str::from_utf8(&matcher_data_buffer[json_start.try_into()?..])?;
+    credman.host_log(&format!("matcher_data_json: {}", matcher_data_str));
+
+    let matcher_data: IssuanceMatcherData = DeJson::deserialize_json(matcher_data_str)?;
+    credman.host_log(&format!("matcher_data deserialized: {:?}", matcher_data));
+
+    let request_buffer = credman.get_request_buffer();
+    let request_str = std::str::from_utf8(&request_buffer)?;
+    credman.host_log(&format!("request_json: {}", request_str));
+
+    let request: DigitalCredentialCreationRequest = DeJson::deserialize_json(request_str)?;
+    credman.host_log(&format!("request deserialized: {:?}", request));
+
+    for (i, r) in request.requests.iter().enumerate() {
+        credman.host_log(&format!("Processing request {}", i));
+        let protocol_allowed = ALLOWED_PROTOCOLS.iter().any(|s| r.protocol == *s);
+        credman.host_log(&format!(
+            "Protocol: {}, allowed: {}",
+            r.protocol, protocol_allowed
+        ));
+
+        if protocol_allowed {
+            let regularized = RegularizedOpenId4VciRequestData::from(&r.data);
+            let filter_matches = matcher_data.filter.matches(&regularized);
+            credman.host_log(&format!("Filter matches: {}", filter_matches));
+
+            if filter_matches {
+                credman.host_log("Match found, adding string id entry");
+                let icon = &matcher_data_buffer[matcher_data.icon.0..matcher_data.icon.1];
+                let entry_id = CString::new(matcher_data.entry_id.clone())?;
+                let title = matcher_data
+                    .title
+                    .as_ref()
+                    .map(|s| CString::new(s.clone()))
+                    .transpose()?;
+                let subtitle = matcher_data
+                    .subtitle
+                    .as_ref()
+                    .map(|s| CString::new(s.clone()))
+                    .transpose()?;
+                credman.add_string_id_entry(
+                    &entry_id,
+                    if icon.is_empty() { None } else { Some(icon) },
+                    title.as_deref(),
+                    subtitle.as_deref(),
+                    None,
+                    None,
+                );
+            }
+        }
+    }
+
+    credman.host_log("issuance_main finished");
     Ok(())
 }
 
@@ -104,6 +139,9 @@ mod test {
                 warning: warning.map(|c| c.to_owned()),
             });
         }
+        fn host_log(&self, msg: &str) {
+            println!("HOST_LOG: {}", msg);
+        }
     }
 
     #[test]
@@ -134,7 +172,7 @@ mod test {
         "entry_id": "C",
         "title": "TTTT",
         "subtitle": "SSSSS",
-        "icon": [0, 0],
+        "icon": [4, 4],
         "filter": {
           "And": {
             "filters": [{
@@ -191,7 +229,7 @@ mod test {
         "entry_id": "C",
         "title": "TTTT",
         "subtitle": "SSSSS",
-        "icon": [0, 0],
+        "icon": [4, 4],
         "filter": {"Unit": {}}"#,
             icon: Vec::new(),
             added_entries: Vec::new(),
@@ -230,8 +268,8 @@ mod test {
   "title": "TTTT",
   "subtitle": "SSSSS",
   "icon": [
-    0,
-    0
+    4,
+    4
   ],
   "filter": {
     "And": {
@@ -308,8 +346,8 @@ mod test {
   "title": "TTTT",
   "subtitle": "SSSSS",
   "icon": [
-    0,
-    0
+    4,
+    4
   ],
   "filter": {
     "Or": {

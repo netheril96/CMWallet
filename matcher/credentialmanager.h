@@ -125,6 +125,11 @@ __attribute__((import_module("credman_v5"), import_name("AddMetadataDisplayTextT
 #endif
 void AddMetadataDisplayTextToEntrySet(const char *cred_id, const char *metadata_display_text, const char *set_id, int set_index);
 
+#if defined(__wasm__)
+__attribute__((import_module("credman"), import_name("HostLog")))
+#endif
+void HostLog(const char* msg, int length);
+
 #ifdef __cplusplus
 }
 #endif

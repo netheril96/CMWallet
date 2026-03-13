@@ -1,7 +1,12 @@
-use matcher_rs::{credman::CredmanApiImpl, issuance::issuance_main};
+use matcher_rs::{credman::CredmanApi, credman::CredmanApiImpl, issuance::issuance_main};
 
 fn main() {
-    issuance_main(&mut CredmanApiImpl {}).unwrap();
+    let mut credman = CredmanApiImpl {};
+    credman.host_log("WASM issuance started");
+    match issuance_main(&mut credman) {
+        Ok(_) => credman.host_log("WASM issuance finished successfully"),
+        Err(e) => credman.host_log(&format!("WASM issuance failed: {:?}", e)),
+    }
 }
 
 // Credman expects this as the entry point, but it isn't there if the target is wasm32-unknown-unknown.
