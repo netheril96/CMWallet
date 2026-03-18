@@ -1,10 +1,10 @@
 use std::collections::HashSet;
 
-use nanoserde::DeJson;
+use serde::Deserialize;
 
 use crate::openid4vci::RegularizedOpenId4VciRequestData;
 
-#[derive(DeJson, Debug)]
+#[derive(Deserialize, Debug)]
 pub enum OpenId4VciFilter {
     Unit {}, // A placeholder that always matches
     And { filters: Vec<OpenId4VciFilter> },
@@ -76,8 +76,8 @@ impl OpenId4VciFilter {
     }
 }
 
-#[derive(DeJson, Debug, Default)]
-#[nserde(default)]
+#[derive(Deserialize, Debug, Default)]
+#[serde(default)]
 pub struct IssuanceMatcherData {
     pub entry_id: String,
     pub icon: (usize, usize),

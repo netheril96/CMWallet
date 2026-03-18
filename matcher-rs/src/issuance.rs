@@ -6,7 +6,6 @@ use crate::{
     openid4vci::{DigitalCredentialCreationRequest, RegularizedOpenId4VciRequestData},
 };
 
-use nanoserde::DeJson;
 
 const ALLOWED_PROTOCOLS: [&str; 4] = [
     "openid4vci-1.0",
@@ -34,14 +33,14 @@ pub fn issuance_main(credman: &mut impl CredmanApi) -> Result<(), Box<dyn std::e
     let matcher_data_str = std::str::from_utf8(&matcher_data_buffer[json_start.try_into()?..])?;
     credman.host_log(&format!("matcher_data_json: {}", matcher_data_str));
 
-    let matcher_data: IssuanceMatcherData = DeJson::deserialize_json(matcher_data_str)?;
+    let matcher_data: IssuanceMatcherData = serde_json::from_str(matcher_data_str)?;
     credman.host_log(&format!("matcher_data deserialized: {:?}", matcher_data));
 
     let request_buffer = credman.get_request_buffer();
     let request_str = std::str::from_utf8(&request_buffer)?;
-    credman.host_log(&format!("request_json: {}", request_str));
+    credman.host_log(&format!("request_json: {:?}", request_str));
 
-    let request: DigitalCredentialCreationRequest = DeJson::deserialize_json(request_str)?;
+    let request: DigitalCredentialCreationRequest = serde_json::from_str(request_str)?;
     credman.host_log(&format!("request deserialized: {:?}", request));
 
     for (i, r) in request.requests.iter().enumerate() {
@@ -158,7 +157,9 @@ mod test {
           "US_SOCIAL_SECURITY_NUMBER"
         ],
         "grants": {
-          "authorization_code": {}
+          "authorization_code": {
+            "foo": "bar"
+          }
         },
         "credential_issuer_metadata": {
           "nonce_endpoint": "https://nonce.my"
@@ -236,7 +237,9 @@ mod test {
         };
 
         let errmsg = format!("{:?}", issuance_main(&mut credman).unwrap_err());
-        assert!(errmsg.contains("Unexpected token Eof") || errmsg.contains("Unexpected end of file"));
+        assert!(
+            errmsg.to_lowercase().contains("eof")
+        );
     }
 
     #[test]
@@ -253,7 +256,7 @@ mod test {
           "US_SOCIAL_SECURITY_NUMBER"
         ],
         "grants": {
-          "authorization_code": {}
+          "authorization_code": { }
         },
         "credential_issuer_metadata": {
           "nonce_endpoint": "https://nonce.my"
