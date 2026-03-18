@@ -12,7 +12,7 @@ for i in {1..8}; do
     rm -rf target
     bash "./$i.sh"
     
-    DEST="../app/src/main/assets/openid4vci-nano-$i.wasm"
+    DEST="../app/src/main/assets/openid4vci-serde-$i.wasm"
     echo "Copying $WASM_PATH to $DEST"
     cp "$WASM_PATH" "$DEST"
 done
