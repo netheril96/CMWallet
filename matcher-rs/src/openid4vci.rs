@@ -1,23 +1,23 @@
 #![allow(unused)]
 
-use nanoserde::DeJson;
+use serde::Deserialize;
 use std::collections::HashMap;
 
-#[derive(DeJson, Debug, Default)]
-#[nserde(default)]
+#[derive(Deserialize, Debug, Default)]
+#[serde(default)]
 pub struct DigitalCredentialCreationRequest {
     pub requests: Vec<OpenId4VciRequest>,
 }
 
-#[derive(DeJson, Debug, Default)]
-#[nserde(default)]
+#[derive(Deserialize, Debug, Default)]
+#[serde(default)]
 pub struct OpenId4VciRequest {
     pub protocol: String,
     pub data: OpenId4VciRequestData,
 }
 
-#[derive(DeJson, Debug, Default)]
-#[nserde(default)]
+#[derive(Deserialize, Debug, Default)]
+#[serde(default)]
 pub struct OpenId4VciRequestData {
     pub credential_issuer: String,
     pub credential_configuration_ids: Vec<String>,
@@ -62,24 +62,19 @@ impl<'a> From<&'a OpenId4VciRequestData> for RegularizedOpenId4VciRequestData<'a
 }
 
 pub mod credential_offer {
-    use nanoserde::DeJson;
+    use serde::Deserialize;
 
-    #[derive(DeJson, Debug, Default)]
-    #[nserde(default)]
-    pub struct Grant {
-        // Workaround for nanoserde bug:
-        // https://github.com/not-fl3/nanoserde/issues/157
-        #[allow(unused)]
-        pub _dummy_not_in_use: i32,
-    }
+    #[derive(Deserialize, Debug, Default)]
+    #[serde(default)]
+    pub struct Grant {}
 }
 
 mod credential_issuer_metadata {
-    use nanoserde::DeJson;
+    use serde::Deserialize;
     use std::collections::{HashMap, HashSet};
 
-    #[derive(DeJson, Debug, Default)]
-    #[nserde(default)]
+    #[derive(Deserialize, Debug, Default)]
+    #[serde(default)]
     pub struct CredentialIssuerMetadata {
         // pub credential_issuer: String,
         // pub authorization_servers: Option<Vec<String>>,
@@ -94,17 +89,17 @@ mod credential_issuer_metadata {
         pub credential_configurations_supported: HashMap<String, CredentialConfiguration>,
     }
 
-    #[derive(DeJson, Debug, Default)]
-    #[nserde(default)]
+    #[derive(Deserialize, Debug, Default)]
+    #[serde(default)]
     pub struct CredentialRequestEncryption {
-        // pub jwks: nanoserde::DeJson, // nanoserde doesn't have a Value type
+        // pub jwks: serde_json::Value,
         pub enc_values_supported: HashSet<String>,
         // pub zip_values_supported: Option<Vec<String>>,
         pub encryption_required: bool,
     }
 
-    #[derive(DeJson, Debug, Default)]
-    #[nserde(default)]
+    #[derive(Deserialize, Debug, Default)]
+    #[serde(default)]
     pub struct CredentialResponseEncryption {
         pub alg_values_supported: HashSet<String>,
         pub enc_values_supported: HashSet<String>,
@@ -112,29 +107,29 @@ mod credential_issuer_metadata {
         pub encryption_required: bool,
     }
 
-    #[derive(DeJson, Debug, Default)]
-    #[nserde(default)]
+    #[derive(Deserialize, Debug, Default)]
+    #[serde(default)]
     pub struct BatchCredentialIssuance {
         pub batch_size: u32,
     }
 
-    #[derive(DeJson, Debug, Default)]
-    #[nserde(default)]
+    #[derive(Deserialize, Debug, Default)]
+    #[serde(default)]
     pub struct Display {
         pub name: String,
         pub locale: String,
         pub logo: Option<Logo>,
     }
 
-    #[derive(DeJson, Debug, Default)]
-    #[nserde(default)]
+    #[derive(Deserialize, Debug, Default)]
+    #[serde(default)]
     pub struct Logo {
         pub uri: String,
         pub alt_text: String,
     }
 
-    #[derive(DeJson, Debug, Default)]
-    #[nserde(default)]
+    #[derive(Deserialize, Debug, Default)]
+    #[serde(default)]
     pub struct CredentialConfiguration {
         pub format: String,
         pub scope: String,
@@ -145,15 +140,15 @@ mod credential_issuer_metadata {
         pub proof_types_supported: HashMap<String, ProofType>,
     }
 
-    #[derive(DeJson, Debug, Default)]
-    #[nserde(default)]
+    #[derive(Deserialize, Debug, Default)]
+    #[serde(default)]
     pub struct ProofType {
         pub proof_signing_alg_values_supported: Vec<String>,
         pub key_attestations_required: Option<KeyAttestationsRequired>,
     }
 
-    #[derive(DeJson, Debug, Default)]
-    #[nserde(default)]
+    #[derive(Deserialize, Debug, Default)]
+    #[serde(default)]
     pub struct KeyAttestationsRequired {
         pub key_storage: Option<Vec<String>>,
         pub user_authentication: Option<Vec<String>>,

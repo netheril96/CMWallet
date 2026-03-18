@@ -30,10 +30,12 @@ impl CredmanApi for CredmanApiImpl {
         unsafe {
             GetRequestSize(&mut size);
         }
+        self.host_log(&format!("Request buffer size: {size}"));
         let mut r = vec![0; size as usize];
         unsafe {
             GetRequestBuffer(r.as_mut_ptr() as *mut c_void);
         }
+        self.host_log(&format!("Request buffer: {r:?}"));
         r
     }
     fn get_registered_data(&self) -> Vec<u8> {
