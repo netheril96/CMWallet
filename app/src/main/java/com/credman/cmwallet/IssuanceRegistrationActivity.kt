@@ -82,6 +82,7 @@ class IssuanceRegistrationActivity : ComponentActivity() {
     }
 
     private fun registerMatcher(fileName: String) {
+        Log.i("IssuanceReg", "Registering matcher from file: $fileName")
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val registryManager = RegistryManager.create(this@IssuanceRegistrationActivity)
