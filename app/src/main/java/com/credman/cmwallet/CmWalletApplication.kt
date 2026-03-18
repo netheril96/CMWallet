@@ -7,7 +7,6 @@ import androidx.core.graphics.drawable.toBitmap
 import androidx.credentials.DigitalCredential
 import androidx.credentials.ExperimentalDigitalCredentialApi
 import androidx.credentials.provider.CallingAppInfo
-import androidx.credentials.registry.provider.RegisterCreationOptionsRequest
 import androidx.credentials.registry.provider.RegistryManager
 import androidx.credentials.registry.provider.digitalcredentials.DigitalCredentialRegistry
 import androidx.room.Room
@@ -18,11 +17,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
-import org.json.JSONArray
-import org.json.JSONObject
-import java.io.ByteArrayOutputStream
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
 import kotlin.io.encoding.ExperimentalEncodingApi
 
 
@@ -93,31 +87,6 @@ class CmWalletApplication : Application() {
                 )
             }
         }
-        applicationScope.launch(Dispatchers.IO) {
-            try {
-                Log.i(TAG, "Issuance registration started.")
-                registryManager.registerCreationOptions(object :
-                    RegisterCreationOptionsRequest(
-                        creationOptions = buildIssuanceData(),
-                        matcher = loadIssuanceMatcher(),
-                        type = DigitalCredential.TYPE_DIGITAL_CREDENTIAL,
-                        id = "openid4vci",
-                        intentAction = "",
-                    ) {})
-                Log.i(TAG, "Issuance registration succeeded.")
-            } catch (e: Exception) {
-                Log.e(TAG, "Issuance registration failed.", e)
-            }
-        }
-
-//        TODO: delete: this is only for testing.
-//        CoroutineScope(Dispatchers.IO).launch {
-//            delay(5000)
-//            val json = readAsset("test.json").toString(Charsets.UTF_8)
-//            database.credentialDao().insertAll(Credential(2000L, json))
-////            delay(5000)
-////            database.credentialDao().delete(Credential(2000L, json))
-//        }
     }
 
     private fun readAsset(fileName: String): ByteArray {
@@ -134,44 +103,6 @@ class CmWalletApplication : Application() {
 
     private fun loadOpenId4VP1_0Matcher(): ByteArray {
         return readAsset("openid4vp1_0.wasm")
-    }
-
-    private fun buildIssuanceData(): ByteArray {
-        val walletIcon = resources.getDrawable(R.mipmap.ic_launcher, theme).toBitmap()
-        val iconBuffer = ByteArrayOutputStream()
-        walletIcon.compress(Bitmap.CompressFormat.PNG, 100, iconBuffer)
-        val iconBytes = iconBuffer.toByteArray()
-
-        val jsonOffset = 4 + iconBytes.size
-
-        val matcherDataJson = JSONObject().apply {
-            put("entry_id", "openid4vci")
-            put("icon", JSONArray().apply {
-                put(4)
-                put(jsonOffset)
-            })
-            put("title", resources.getString(R.string.app_name))
-            put("subtitle", "Save your document to CMWallet")
-            put("filter", JSONObject().apply {
-                put("Unit", JSONObject())
-            })
-        }
-
-        val jsonBytes = matcherDataJson.toString().toByteArray()
-
-        val out = ByteArrayOutputStream()
-        val buffer = ByteBuffer.allocate(4)
-        buffer.order(ByteOrder.LITTLE_ENDIAN)
-        buffer.putInt(jsonOffset)
-        out.write(buffer.array())
-        out.write(iconBytes)
-        out.write(jsonBytes)
-
-        return out.toByteArray()
-    }
-
-    private fun loadIssuanceMatcher(): ByteArray {
-        return readAsset("openid4vci.wasm")
     }
 
     private fun loadPhoneNumberMatcher(): ByteArray {
