@@ -143,7 +143,27 @@ class IssuanceRegistrationActivity : ComponentActivity() {
             put("title", resources.getString(R.string.app_name))
             put("subtitle", "Save your document to CMWallet")
             put("filter", JSONObject().apply {
-                put("Unit", JSONObject())
+                put("And", JSONObject().apply {
+                    put("filters", JSONArray().apply {
+                        put(JSONObject().apply {
+                            put("AllowsIssuers", JSONObject().apply {
+                                put("issuers", JSONArray().apply {
+                                    put("https://digital-credentials.dev")
+                                })
+                            })
+                        })
+                        put(JSONObject().apply {
+                            put("SupportsPreAuthFlow", JSONObject())
+                        })
+                        put(JSONObject().apply {
+                            put("SupportsMdocDoctype", JSONObject().apply {
+                                put("doctypes", JSONArray().apply {
+                                    put("com.emvco.payment_card")
+                                })
+                            })
+                        })
+                    })
+                })
             })
         }
 
