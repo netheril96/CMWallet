@@ -5,6 +5,9 @@ static ALLOCATOR: lol_alloc::AssumeSingleThreaded<lol_alloc::LeakingAllocator> =
 
 pub mod bindings;
 pub mod credman;
+pub mod dcql;
 pub mod issuance;
 pub mod issuance_matcher;
 pub mod openid4vci;
+pub mod openid4vp;
+pub mod openid4vp_matcher;
