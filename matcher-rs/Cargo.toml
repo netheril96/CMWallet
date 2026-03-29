@@ -2,21 +2,28 @@
 name = "matcher-rs"
 version = "0.1.0"
 authors = ["rensiyuan"]
-edition = "2024"
+edition = "2021"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+[[bin]]
+name = "issuance"
+path = "src/bin/issuance.rs"
+
+[[bin]]
+name = "presentation"
+path = "src/bin/presentation.rs"
+
 [dependencies]
 nanoserde = "0.1"
+base64 = "0.22"
 log = "0.4"
 
 [features]
 default = ["static_log_off"]
 static_log_off = ["log/max_level_off"]
 logging = []
-
-[dev-dependencies]
 
 [build-dependencies]
 
