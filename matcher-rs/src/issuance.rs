@@ -98,6 +98,82 @@ mod test {
                 warning: warning.map(|c| c.to_owned()),
             });
         }
+
+        fn add_entry_set(&mut self, _set_id: &CStr, _set_length: i32) {}
+
+        fn add_entry_to_set(
+            &mut self,
+            _cred_id: &CStr,
+            _icon: Option<&[u8]>,
+            _title: &CStr,
+            _subtitle: &CStr,
+            _disclaimer: &CStr,
+            _warning: Option<&CStr>,
+            _metadata: &CStr,
+            _set_id: &CStr,
+            _set_index: i32,
+        ) {
+        }
+
+        fn add_field_to_entry_set(
+            &mut self,
+            _cred_id: &CStr,
+            _field_display_name: &CStr,
+            _field_display_value: Option<&CStr>,
+            _set_id: &CStr,
+            _set_index: i32,
+        ) {
+        }
+
+        fn add_payment_entry_to_set_v2(
+            &mut self,
+            _cred_id: &CStr,
+            _merchant_name: &CStr,
+            _payment_method_name: &CStr,
+            _payment_method_subtitle: &CStr,
+            _payment_method_icon: Option<&[u8]>,
+            _transaction_amount: &CStr,
+            _bank_icon: Option<&[u8]>,
+            _payment_provider_icon: Option<&[u8]>,
+            _additional_info: &CStr,
+            _metadata: &CStr,
+            _set_id: &CStr,
+            _set_index: i32,
+        ) {
+        }
+
+        fn add_inline_issuance_entry(
+            &mut self,
+            _cred_id: &CStr,
+            _icon: Option<&[u8]>,
+            _title: &CStr,
+            _subtitle: &CStr,
+        ) {
+        }
+
+        fn get_wasm_version(&self) -> u32 {
+            0
+        }
+
+        fn set_additional_disclaimer_and_url_for_verification_entry_in_credential_set(
+            &mut self,
+            _cred_id: &CStr,
+            _secondary_disclaimer: Option<&CStr>,
+            _url_display_text: Option<&CStr>,
+            _url_value: Option<&CStr>,
+            _set_id: &CStr,
+            _set_index: i32,
+        ) {
+        }
+
+        fn add_metadata_display_text_to_entry_set(
+            &mut self,
+            _cred_id: &CStr,
+            _metadata_display_text: &CStr,
+            _set_id: &CStr,
+            _set_index: i32,
+        ) {
+        }
     }
 
     #[test]

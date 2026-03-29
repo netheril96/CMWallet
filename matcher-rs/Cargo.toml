@@ -2,17 +2,23 @@
 name = "matcher-rs"
 version = "0.1.0"
 authors = ["rensiyuan"]
-edition = "2024"
+edition = "2021"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+[[bin]]
+name = "issuance"
+path = "src/bin/issuance.rs"
+
+[[bin]]
+name = "presentation"
+path = "src/bin/presentation.rs"
+
 [dependencies]
 nanoserde = "0.1"
+base64 = "0.22"
 
-[dev-dependencies]
-
-[build-dependencies]
 
 [profile.release]
 # Tell `rustc` to optimize for small code size.
