@@ -4,7 +4,6 @@ use crate::dcql_engine::*;
 use crate::openid4vp::*;
 use nanoserde::{DeJson, SerJson};
 use std::collections::HashMap;
-use std::ffi::CString;
 
 #[derive(SerJson, Default)]
 pub struct MatchedMetadata {
@@ -44,9 +43,6 @@ fn report_matched_credential(
         dcql_option_index: dcql_option_idx.to_string(),
     };
     let metadata_json = SerJson::serialize_json(&metadata);
-    let metadata_cstr = CString::new(metadata_json)?;
-    let set_id_cstr = CString::new(set_id)?;
-    let entry_id_cstr = CString::new(info.id.clone())?;
 
     let mut is_payment = false;
     if let Some(td) = transaction_data {
@@ -70,60 +66,50 @@ fn report_matched_credential(
                 format!("{} {}", td.payload.currency, td.payload.amount)
             };
 
-            let merchant_name_cstr = CString::new(merchant_name.clone())?;
-            let amount_cstr = CString::new(amount)?;
-            let title_cstr = CString::new(info.display.verification.title.clone())?;
-            let subtitle_cstr = CString::new(info.display.verification.subtitle.clone())?;
             let icon_bytes = get_icon_bytes(&info.display.verification.icon, registered_data);
-            let additional_info_cstr = CString::new(td.additional_info.clone())?;
 
             credman.add_payment_entry_to_set_v2(
-                &entry_id_cstr,
-                &merchant_name_cstr,
-                &title_cstr,
-                &subtitle_cstr,
+                &info.id,
+                merchant_name,
+                &info.display.verification.title,
+                &info.display.verification.subtitle,
                 icon_bytes,
-                &amount_cstr,
+                &amount,
                 None, // bank_icon
                 None, // provider_icon
-                &additional_info_cstr,
-                &metadata_cstr,
-                &set_id_cstr,
+                &td.additional_info,
+                &metadata_json,
+                set_id,
                 doc_idx,
             );
         }
     }
 
     if !is_payment {
-        let title_cstr = CString::new(info.display.verification.title.clone())?;
-        let subtitle_cstr = CString::new(info.display.verification.subtitle.clone())?;
-        let disclaimer_cstr = CString::new(info.display.verification.explainer.clone())?;
         let warning = if !info.display.verification.warning.is_empty() {
-            Some(CString::new(info.display.verification.warning.clone())?)
+            Some(info.display.verification.warning.as_str())
         } else {
             None
         };
         let icon_bytes = get_icon_bytes(&info.display.verification.icon, registered_data);
 
         credman.add_entry_to_set(
-            &entry_id_cstr,
+            &info.id,
             icon_bytes,
-            &title_cstr,
-            &subtitle_cstr,
-            &disclaimer_cstr,
-            warning.as_deref(),
-            &metadata_cstr,
-            &set_id_cstr,
+            &info.display.verification.title,
+            &info.display.verification.subtitle,
+            &info.display.verification.explainer,
+            warning,
+            &metadata_json,
+            set_id,
             doc_idx,
         );
 
         if wasm_version >= 5 && !info.display.verification.metadata_display_text.is_empty() {
-            let meta_display_cstr =
-                CString::new(info.display.verification.metadata_display_text.clone())?;
             credman.add_metadata_display_text_to_entry_set(
-                &entry_id_cstr,
-                &meta_display_cstr,
-                &set_id_cstr,
+                &info.id,
+                &info.display.verification.metadata_display_text,
+                set_id,
                 doc_idx,
             );
         }
@@ -133,17 +119,16 @@ fn report_matched_credential(
             .iter()
             .zip(info.matched_claim_metadata.iter())
         {
-            let field_name_cstr = CString::new(name.display_name.clone())?;
-            let field_value_cstr = if !name.display_value.is_empty() {
-                Some(CString::new(name.display_value.clone())?)
+            let field_value = if !name.display_value.is_empty() {
+                Some(name.display_value.as_str())
             } else {
                 None
             };
             credman.add_field_to_entry_set(
-                &entry_id_cstr,
-                &field_name_cstr,
-                field_value_cstr.as_deref(),
-                &set_id_cstr,
+                &info.id,
+                &name.display_name,
+                field_value,
+                set_id,
                 doc_idx,
             );
         }
@@ -225,8 +210,7 @@ fn report_set_length_recursive(
     matched_sets: &[Vec<MatchedOption>],
 ) -> Result<(), Box<dyn std::error::Error>> {
     if curr_set_idx >= matched_sets.len() {
-        let set_id_cstr = CString::new(set_id)?;
-        credman.add_entry_set(&set_id_cstr, curr_len);
+        credman.add_entry_set(set_id, curr_len);
         return Ok(());
     }
 
@@ -289,9 +273,8 @@ pub fn presentation_main(credman: &mut impl CredmanApi) -> Result<(), Box<dyn st
             if wasm_version > 1 {
                 if data.dcql_query.credential_sets.is_empty() {
                     let set_id = format!("req:{};null", i);
-                    let set_id_cstr = CString::new(set_id)?;
                     let len = data.dcql_query.credentials.len() as i32;
-                    credman.add_entry_set(&set_id_cstr, len);
+                    credman.add_entry_set(&set_id, len);
                 } else {
                     for option in &match_result.matched_credential_sets[0] {
                         let set_id = format!(
@@ -325,11 +308,8 @@ pub fn presentation_main(credman: &mut impl CredmanApi) -> Result<(), Box<dyn st
         }
 
         if let Some(issuance) = match_result.inline_issuance {
-            let id_cstr = CString::new(issuance.id)?;
-            let title_cstr = CString::new(issuance.title)?;
-            let subtitle_cstr = CString::new(issuance.subtitle)?;
             let icon_bytes = get_icon_bytes(&issuance.icon, &registered_data);
-            credman.add_inline_issuance_entry(&id_cstr, icon_bytes, &title_cstr, &subtitle_cstr);
+            credman.add_inline_issuance_entry(&issuance.id, icon_bytes, &issuance.title, &issuance.subtitle);
         }
     }
 
@@ -339,7 +319,6 @@ pub fn presentation_main(credman: &mut impl CredmanApi) -> Result<(), Box<dyn st
 #[cfg(test)]
 mod test {
     use super::*;
-    use std::ffi::CStr;
 
     #[derive(Default)]
     struct FakeCredman {
@@ -366,85 +345,85 @@ mod test {
         }
         fn add_string_id_entry(
             &mut self,
-            _: &CStr,
+            _: &str,
             _: Option<&[u8]>,
-            _: Option<&CStr>,
-            _: Option<&CStr>,
-            _: Option<&CStr>,
-            _: Option<&CStr>,
+            _: Option<&str>,
+            _: Option<&str>,
+            _: Option<&str>,
+            _: Option<&str>,
         ) {
         }
-        fn add_entry_set(&mut self, set_id: &CStr, set_length: i32) {
+        fn add_entry_set(&mut self, set_id: &str, set_length: i32) {
             self.added_sets
-                .push((set_id.to_str().unwrap().to_string(), set_length));
+                .push((set_id.to_string(), set_length));
         }
         fn add_entry_to_set(
             &mut self,
-            cred_id: &CStr,
+            cred_id: &str,
             _: Option<&[u8]>,
-            _: &CStr,
-            _: &CStr,
-            _: &CStr,
-            _: Option<&CStr>,
-            metadata: &CStr,
-            set_id: &CStr,
+            _: &str,
+            _: &str,
+            _: &str,
+            _: Option<&str>,
+            metadata: &str,
+            set_id: &str,
             _: i32,
         ) {
             self.added_entries_to_set.push(format!(
                 "{}:{}:{}",
-                set_id.to_str().unwrap(),
-                cred_id.to_str().unwrap(),
-                metadata.to_str().unwrap()
+                set_id,
+                cred_id,
+                metadata
             ));
         }
         fn add_field_to_entry_set(
             &mut self,
-            cred_id: &CStr,
-            field_name: &CStr,
-            field_value: Option<&CStr>,
-            _: &CStr,
+            cred_id: &str,
+            field_name: &str,
+            field_value: Option<&str>,
+            _: &str,
             _: i32,
         ) {
             self.added_fields.push(format!(
                 "{}:{}:{}",
-                cred_id.to_str().unwrap(),
-                field_name.to_str().unwrap(),
-                field_value.map_or("", |v| v.to_str().unwrap())
+                cred_id,
+                field_name,
+                field_value.unwrap_or("")
             ));
         }
         fn add_payment_entry_to_set_v2(
             &mut self,
-            _: &CStr,
-            merchant_name: &CStr,
-            _: &CStr,
-            _: &CStr,
+            _: &str,
+            merchant_name: &str,
+            _: &str,
+            _: &str,
             _: Option<&[u8]>,
-            transaction_amount: &CStr,
+            transaction_amount: &str,
             _: Option<&[u8]>,
             _: Option<&[u8]>,
-            additional_info: &CStr,
-            _: &CStr,
-            _: &CStr,
+            additional_info: &str,
+            _: &str,
+            _: &str,
             _: i32,
         ) {
             self.added_payments.push(format!(
                 "{}:{}:{}",
-                merchant_name.to_str().unwrap(),
-                transaction_amount.to_str().unwrap(),
-                additional_info.to_str().unwrap()
+                merchant_name,
+                transaction_amount,
+                additional_info
             ));
         }
         fn add_inline_issuance_entry(
             &mut self,
-            id: &CStr,
+            id: &str,
             _: Option<&[u8]>,
-            title: &CStr,
-            _: &CStr,
+            title: &str,
+            _: &str,
         ) {
             self.added_issuance.push(format!(
                 "{}:{}",
-                id.to_str().unwrap(),
-                title.to_str().unwrap()
+                id,
+                title
             ));
         }
         fn get_wasm_version(&self) -> u32 {
@@ -452,25 +431,25 @@ mod test {
         }
         fn set_additional_disclaimer_and_url_for_verification_entry_in_credential_set(
             &mut self,
-            _: &CStr,
-            _: Option<&CStr>,
-            _: Option<&CStr>,
-            _: Option<&CStr>,
-            _: &CStr,
+            _: &str,
+            _: Option<&str>,
+            _: Option<&str>,
+            _: Option<&str>,
+            _: &str,
             _: i32,
         ) {
         }
         fn add_metadata_display_text_to_entry_set(
             &mut self,
-            cred_id: &CStr,
-            text: &CStr,
-            _: &CStr,
+            cred_id: &str,
+            text: &str,
+            _: &str,
             _: i32,
         ) {
             self.added_metadata_text.push(format!(
                 "{}:{}",
-                cred_id.to_str().unwrap(),
-                text.to_str().unwrap()
+                cred_id,
+                text
             ));
         }
     }
