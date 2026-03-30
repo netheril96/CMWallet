@@ -1,4 +1,5 @@
 use crate::dcql::*;
+use log::debug;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Default)]
@@ -52,15 +53,20 @@ pub fn match_credential(
     query_cred: &CredentialQuery,
     store: &RegistryFormatCollection,
 ) -> (Vec<MatchedCredentialInfo>, Option<RegistryIssuanceEntry>) {
+    debug!("Matching query credential: id={}, format={}", query_cred.id, query_cred.format);
     let mut matched_infos = Vec::new();
     let mut inline_issuance = None;
 
     let format_candidates: Option<Vec<&RegistryCredential>> = match query_cred.format.as_str() {
-        "mso_mdoc" => store
-            .mso_mdoc
-            .get(&query_cred.meta.doctype_value)
-            .map(|v| v.iter().collect()),
+        "mso_mdoc" => {
+            debug!("Filtering mso_mdoc candidates by doctype: {}", query_cred.meta.doctype_value);
+            store
+                .mso_mdoc
+                .get(&query_cred.meta.doctype_value)
+                .map(|v| v.iter().collect())
+        }
         "dc+sd-jwt" => {
+            debug!("Filtering dc+sd-jwt candidates by vct values: {:?}", query_cred.meta.vct_values);
             let mut all = Vec::new();
             for vct in &query_cred.meta.vct_values {
                 if let Some(c) = store.dc_sd_jwt.get(vct) {
@@ -73,7 +79,10 @@ pub fn match_credential(
                 Some(all)
             }
         }
-        _ => None,
+        _ => {
+            debug!("Unsupported format: {}", query_cred.format);
+            None
+        },
     };
 
     // Inline issuance
@@ -81,6 +90,7 @@ pub fn match_credential(
         "mso_mdoc" => {
             for entry in &store.issuance.mso_mdoc {
                 if entry.supported.contains(&query_cred.meta.doctype_value) {
+                    debug!("Found matching mso_mdoc inline issuance entry: {}", entry.id);
                     inline_issuance = Some(entry.clone());
                     break;
                 }
@@ -94,6 +104,7 @@ pub fn match_credential(
                     .iter()
                     .any(|vct| entry.supported.contains(vct))
                 {
+                    debug!("Found matching dc+sd-jwt inline issuance entry: {}", entry.id);
                     inline_issuance = Some(entry.clone());
                     break;
                 }
@@ -103,6 +114,7 @@ pub fn match_credential(
     }
 
     if let Some(candidates) = format_candidates {
+        debug!("Evaluating {} candidates", candidates.len());
         for candidate in candidates {
             let mut matched_info = MatchedCredentialInfo {
                 id: candidate.id.clone(),
@@ -111,11 +123,13 @@ pub fn match_credential(
             };
 
             if query_cred.claims.is_empty() {
+                debug!("No claims in query, auto-matching candidate: {}", candidate.id);
                 candidate
                     .paths
                     .add_all_claims(&mut matched_info.matched_claim_names);
                 matched_infos.push(matched_info);
             } else {
+                debug!("Evaluating claims for candidate: {}", candidate.id);
                 let mut matched_claim_ids = HashMap::new(); // ID -> (display, path)
                 for claim_query in &query_cred.claims {
                     if let Some(node) = candidate.paths.resolve(&claim_query.path) {
@@ -180,11 +194,13 @@ pub fn match_credential(
 }
 
 pub fn dcql_query(query: &DcqQuery, store: &RegistryFormatCollection) -> MatchResult {
+    debug!("Starting DCQL query with {} query credentials", query.credentials.len());
     let mut result = MatchResult::default();
 
     for cred_query in &query.credentials {
         let (matched, inline) = match_credential(cred_query, store);
         if !matched.is_empty() {
+            debug!("Query credential {} matched {} local credentials", cred_query.id, matched.len());
             result.matched_credentials.insert(
                 cred_query.id.clone(),
                 MatchedQueryCredential {
@@ -199,6 +215,7 @@ pub fn dcql_query(query: &DcqQuery, store: &RegistryFormatCollection) -> MatchRe
     }
 
     if query.credential_sets.is_empty() {
+        debug!("No credential sets in query, checking if all query credentials matched");
         if result.matched_credentials.len() == query.credentials.len() {
             let mut set_info = MatchedOption {
                 ..Default::default()
@@ -206,12 +223,15 @@ pub fn dcql_query(query: &DcqQuery, store: &RegistryFormatCollection) -> MatchRe
             for q in &query.credentials {
                 set_info.matched_credential_ids.push(q.id.clone());
             }
+            debug!("Implicit credential set matched with {} credentials", set_info.matched_credential_ids.len());
             result.matched_credential_sets.push(vec![set_info]);
         }
     } else {
+        debug!("Evaluating {} credential sets", query.credential_sets.len());
         let mut all_sets_matched = true;
         for (set_idx, set_query) in query.credential_sets.iter().enumerate() {
             if !set_query.required {
+                debug!("Skipping optional credential set index {}", set_idx);
                 continue;
             }
 
@@ -225,6 +245,7 @@ pub fn dcql_query(query: &DcqQuery, store: &RegistryFormatCollection) -> MatchRe
                     }
                 }
                 if option_matched {
+                    debug!("Found matching option {} for set index {}", opt_idx, set_idx);
                     curr_set_options.push(MatchedOption {
                         set_id: set_idx.to_string(),
                         option_id: opt_idx.to_string(),
@@ -234,6 +255,7 @@ pub fn dcql_query(query: &DcqQuery, store: &RegistryFormatCollection) -> MatchRe
             }
 
             if curr_set_options.is_empty() {
+                debug!("No matching options for required set index {}, DCQL query failed", set_idx);
                 all_sets_matched = false;
                 break;
             } else {

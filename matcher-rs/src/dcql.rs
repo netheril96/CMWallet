@@ -108,11 +108,14 @@ impl DeJson for RegistryPathNode {
                 match key.as_str() {
                     "value" => {
                         node.value = DeJson::de_json(state, input)?;
+                        log::trace!("Parsed RegistryPathNode value: {}", node.value);
                     }
                     "display" => {
                         node.display = DeJson::de_json(state, input)?;
+                        log::trace!("Parsed RegistryPathNode display: {:?}", node.display);
                     }
                     _ => {
+                        log::trace!("Parsing RegistryPathNode child: {}", key);
                         node.children.insert(key, DeJson::de_json(state, input)?);
                     }
                 }

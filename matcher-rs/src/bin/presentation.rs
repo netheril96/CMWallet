@@ -1,6 +1,7 @@
-use matcher_rs::{credman::CredmanApiImpl, presentation::presentation_main};
+use matcher_rs::{credman::CredmanApiImpl, logger, presentation::presentation_main};
 
 fn main() {
+    logger::init();
     presentation_main(&mut CredmanApiImpl {}).unwrap();
 }
 

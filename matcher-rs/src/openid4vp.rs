@@ -1,5 +1,6 @@
 use crate::dcql::DcqQuery;
 use base64::Engine;
+use log::{debug, error};
 use nanoserde::DeJson;
 
 #[derive(DeJson, Debug, Default, Clone)]
@@ -64,11 +65,14 @@ pub fn extract_signed_request_payload(
 ) -> Result<String, Box<dyn std::error::Error>> {
     let parts: Vec<&str> = signed_request.split('.').collect();
     if parts.len() < 2 {
+        error!("Invalid JWT format, expected at least 2 parts, got {}", parts.len());
         return Err("Invalid JWT: missing payload part".into());
     }
     let payload_b64 = parts[1];
     let decoded = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(payload_b64)?;
-    Ok(String::from_utf8(decoded)?)
+    let payload = String::from_utf8(decoded)?;
+    debug!("Successfully extracted signed request payload: size={}", payload.len());
+    Ok(payload)
 }
 
 pub fn decode_transaction_data(
@@ -76,5 +80,6 @@ pub fn decode_transaction_data(
 ) -> Result<TransactionData, Box<dyn std::error::Error>> {
     let decoded = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(encoded)?;
     let json_str = std::str::from_utf8(&decoded)?;
+    debug!("Successfully decoded transaction data JSON: size={}", json_str.len());
     Ok(DeJson::deserialize_json(json_str)?)
 }

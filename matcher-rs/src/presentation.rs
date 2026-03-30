@@ -2,6 +2,7 @@ use crate::credman::CredmanApi;
 use crate::dcql::*;
 use crate::dcql_engine::*;
 use crate::openid4vp::*;
+use log::{debug, error, info};
 use nanoserde::{DeJson, SerJson};
 use std::collections::HashMap;
 use std::ffi::CString;
@@ -245,47 +246,66 @@ fn report_set_length_recursive(
 pub fn presentation_main(credman: &mut impl CredmanApi) -> Result<(), Box<dyn std::error::Error>> {
     let registered_data = credman.get_registered_data();
     if registered_data.len() < 4 {
+        error!("Invalid registered data: size < 4");
         return Err("Invalid registered data".into());
     }
     let json_offset = u32::from_le_bytes(registered_data[0..4].try_into()?) as usize;
-    let store: CredentialStore =
-        DeJson::deserialize_json(std::str::from_utf8(&registered_data[json_offset..])?)?;
+    info!(
+        "Credential store size: {}, JSON offset: {}",
+        registered_data.len(),
+        json_offset
+    );
+    let store_json = std::str::from_utf8(&registered_data[json_offset..])?;
+    debug!("Credential store JSON: {}", store_json);
+    let store: CredentialStore = DeJson::deserialize_json(store_json)?;
 
     let request_buffer = credman.get_request_buffer();
-    let request_envelope: DigitalPresentationRequest =
-        DeJson::deserialize_json(std::str::from_utf8(&request_buffer)?)?;
+    info!("Request buffer size: {}", request_buffer.len());
+    let request_json = std::str::from_utf8(&request_buffer)?;
+    debug!("Request JSON: {}", request_json);
+    let request_envelope: DigitalPresentationRequest = DeJson::deserialize_json(request_json)?;
 
     let wasm_version = credman.get_wasm_version();
+    info!("WASM host version: {}", wasm_version);
 
     let all_requests = if !request_envelope.requests.is_empty() {
         &request_envelope.requests
     } else {
         &request_envelope.providers
     };
+    info!("Processing {} presentation requests", all_requests.len());
 
     for (i, req) in all_requests.iter().enumerate() {
+        debug!("Request {}: protocol={}", i, req.protocol);
         if req.protocol != "openid4vp-v1-unsigned" && req.protocol != "openid4vp-v1-signed" {
             continue;
         }
 
         let data = if req.protocol == "openid4vp-v1-signed" {
+            info!("Decoding signed request payload");
             let payload = extract_signed_request_payload(&req.data.signed_request)?;
             DeJson::deserialize_json(&payload)?
         } else if !req.legacy_request_data.is_empty() {
+            info!("Decoding legacy request data");
             DeJson::deserialize_json(&req.legacy_request_data)?
         } else {
             req.data.clone()
         };
+let mut transaction_data = None;
+if !data.transaction_data.is_empty() {
+    info!("Found transaction data, decoding...");
+    transaction_data = Some(decode_transaction_data(&data.transaction_data[0])?);
+}
 
-        let mut transaction_data = None;
-        if !data.transaction_data.is_empty() {
-            // Support first transaction data for now
-            transaction_data = Some(decode_transaction_data(&data.transaction_data[0])?);
-        }
+info!("Executing DCQL query for request {}", i);
+let match_result = dcql_query(&data.dcql_query, &store.credentials);
 
-        let match_result = dcql_query(&data.dcql_query, &store.credentials);
+if !match_result.matched_credential_sets.is_empty() {
+    info!(
+        "Found {} matching credential sets",
+        match_result.matched_credential_sets.len()
+    );
 
-        if !match_result.matched_credential_sets.is_empty() {
             if wasm_version > 1 {
                 if data.dcql_query.credential_sets.is_empty() {
                     let set_id = format!("req:{};null", i);
