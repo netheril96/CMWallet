@@ -1,3 +1,14 @@
+//! WASM Logging implementation using `fd_write`.
+//!
+//! Logging is stripped by default at compile time to minimize the WASM binary size,
+//! as the `log` crate and string formatting (fmt) significantly increase the footprint.
+//!
+//! To enable logging during development:
+//! Use `--no-default-features --features logging` when building.
+//!
+//! Example:
+//! cargo build --release --no-default-features --features logging
+
 #[cfg(feature = "logging")]
 use crate::bindings::fd_write;
 #[cfg(feature = "logging")]
