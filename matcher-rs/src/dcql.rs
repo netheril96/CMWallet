@@ -1,12 +1,42 @@
 use nanoserde::DeJson;
 use std::collections::HashMap;
 
+#[derive(Debug, Clone, PartialEq, Default)]
+pub enum RegistryValue {
+    #[default]
+    Null,
+    String(String),
+    U64(u64),
+    I64(i64),
+    F64(f64),
+    Bool(bool),
+}
+
+impl DeJson for RegistryValue {
+    fn de_json(
+        state: &mut nanoserde::DeJsonState,
+        input: &mut std::str::Chars,
+    ) -> Result<Self, nanoserde::DeJsonErr> {
+        let val = match &state.tok {
+            nanoserde::DeJsonTok::Str => RegistryValue::String(state.strbuf.clone()),
+            nanoserde::DeJsonTok::U64(v) => RegistryValue::U64(*v),
+            nanoserde::DeJsonTok::I64(v) => RegistryValue::I64(*v),
+            nanoserde::DeJsonTok::F64(v) => RegistryValue::F64(*v),
+            nanoserde::DeJsonTok::Bool(v) => RegistryValue::Bool(*v),
+            nanoserde::DeJsonTok::Null => RegistryValue::Null,
+            _ => return Err(state.err_parse("Expected primitive value")),
+        };
+        state.next_tok(input)?;
+        Ok(val)
+    }
+}
+
 #[derive(DeJson, Debug, Default, Clone)]
 #[nserde(default)]
 pub struct ClaimQuery {
     pub id: String,
     pub path: Vec<String>,
-    pub values: Vec<String>,
+    pub values: Vec<RegistryValue>,
 }
 
 #[derive(DeJson, Debug, Default, Clone)]
@@ -82,7 +112,7 @@ pub struct RegistryFieldDisplay {
 
 #[derive(Debug, Default, Clone)]
 pub struct RegistryPathNode {
-    pub value: String,
+    pub value: RegistryValue,
     pub display: RegistryFieldDisplay,
     pub children: HashMap<String, RegistryPathNode>,
 }
@@ -108,7 +138,7 @@ impl DeJson for RegistryPathNode {
                 match key.as_str() {
                     "value" => {
                         node.value = DeJson::de_json(state, input)?;
-                        log::trace!("Parsed RegistryPathNode value: {}", node.value);
+                        log::trace!("Parsed RegistryPathNode value: {:?}", node.value);
                     }
                     "display" => {
                         node.display = DeJson::de_json(state, input)?;

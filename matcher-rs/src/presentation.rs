@@ -291,20 +291,20 @@ pub fn presentation_main(credman: &mut impl CredmanApi) -> Result<(), Box<dyn st
         } else {
             req.data.clone()
         };
-let mut transaction_data = None;
-if !data.transaction_data.is_empty() {
-    info!("Found transaction data, decoding...");
-    transaction_data = Some(decode_transaction_data(&data.transaction_data[0])?);
-}
+        let mut transaction_data = None;
+        if !data.transaction_data.is_empty() {
+            info!("Found transaction data, decoding...");
+            transaction_data = Some(decode_transaction_data(&data.transaction_data[0])?);
+        }
 
-info!("Executing DCQL query for request {}", i);
-let match_result = dcql_query(&data.dcql_query, &store.credentials);
+        info!("Executing DCQL query for request {}", i);
+        let match_result = dcql_query(&data.dcql_query, &store.credentials);
 
-if !match_result.matched_credential_sets.is_empty() {
-    info!(
-        "Found {} matching credential sets",
-        match_result.matched_credential_sets.len()
-    );
+        if !match_result.matched_credential_sets.is_empty() {
+            info!(
+                "Found {} matching credential sets",
+                match_result.matched_credential_sets.len()
+            );
 
             if wasm_version > 1 {
                 if data.dcql_query.credential_sets.is_empty() {
@@ -645,7 +645,7 @@ mod test {
                                             {
                                                 "id": "age_over_21",
                                                 "path": ["org.iso.18013.5.1", "age_over_21"],
-                                                "values": ["true"]
+                                                "values": [true]
                                             }
                                         ]
                                     }
@@ -666,7 +666,7 @@ mod test {
                                 "paths": {
                                     "org.iso.18013.5.1": {
                                         "age_over_21": {
-                                            "value": "true",
+                                            "value": true,
                                             "display": {"verification": {"display": "Age"}}
                                         }
                                     }
@@ -678,7 +678,7 @@ mod test {
                                 "paths": {
                                     "org.iso.18013.5.1": {
                                         "age_over_21": {
-                                            "value": "false",
+                                            "value": false,
                                             "display": {"verification": {"display": "Age"}}
                                         }
                                     }
@@ -820,5 +820,72 @@ mod test {
         presentation_main(&mut credman).unwrap();
         assert_eq!(credman.added_entries_to_set.len(), 1);
         assert!(credman.added_entries_to_set[0].contains("cred_signed"));
+    }
+
+    #[test]
+    fn test_sd_jwt_no_match_different_vct() {
+        let mut credman = FakeCredman {
+            request_json: r#"{
+                "requests": [
+                    {
+                        "protocol": "openid4vp-v1-unsigned",
+                        "data": {
+                            "dcql_query": {
+                                "credentials": [
+                                    {
+                                        "id": "pid",
+                                        "format": "dc+sd-jwt",
+                                        "meta": {
+                                            "vct_values": ["urn:eudi:pid:1"]
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                ]
+            }"#
+            .to_string(),
+            registered_json: r#"{"credentials":{"mso_mdoc":{},"dc+sd-jwt":{"urn:eudi:pid:2":[{"id":"noMatchSdJwtDifferentVct","display":{"verification":{"title":"Jon's PID","subtitle":"Jon's PID Subtitle","icon":{"length":136,"start":4}}},"paths":{"family_name":{"display":{"verification":{"display":"Family Name","display_value":"Smith"}},"value":"Smith"},"given_name":{"display":{"verification":{"display":"Given Name","display_value":"Jon"}},"value":"Jon"}}}]},"issuance":{}}}"#
+            .to_string(),
+            ..Default::default()
+        };
+
+        presentation_main(&mut credman).unwrap();
+        assert_eq!(credman.added_entries_to_set.len(), 0);
+    }
+
+    #[test]
+    fn test_sd_jwt_match_correct_vct() {
+        let mut credman = FakeCredman {
+            request_json: r#"{
+                "requests": [
+                    {
+                        "protocol": "openid4vp-v1-unsigned",
+                        "data": {
+                            "dcql_query": {
+                                "credentials": [
+                                    {
+                                        "id": "pid",
+                                        "format": "dc+sd-jwt",
+                                        "meta": {
+                                            "vct_values": ["urn:eudi:pid:2"]
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                ]
+            }"#
+            .to_string(),
+            registered_json: r#"{"credentials":{"mso_mdoc":{},"dc+sd-jwt":{"urn:eudi:pid:2":[{"id":"noMatchSdJwtDifferentVct","display":{"verification":{"title":"Jon's PID","subtitle":"Jon's PID Subtitle","icon":{"length":136,"start":4}}},"paths":{"family_name":{"display":{"verification":{"display":"Family Name","display_value":"Smith"}},"value":"Smith"},"given_name":{"display":{"verification":{"display":"Given Name","display_value":"Jon"}},"value":"Jon"}}}]},"issuance":{}}}"#
+            .to_string(),
+            ..Default::default()
+        };
+
+        presentation_main(&mut credman).unwrap();
+        assert_eq!(credman.added_entries_to_set.len(), 1);
+        assert!(credman.added_entries_to_set[0].contains("noMatchSdJwtDifferentVct"));
     }
 }
