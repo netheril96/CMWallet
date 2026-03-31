@@ -130,6 +130,14 @@ mod test {
             result
         }
 
+        fn get_wasm_version(&self) -> u32 { 1 }
+        fn add_entry_set(&mut self, _set_id: &CStr, _set_length: i32) {}
+        fn add_entry_to_set(&mut self, _cred_id: &CStr, _icon: Option<&[u8]>, _title: &CStr, _subtitle: Option<&CStr>, _explainer: Option<&CStr>, _metadata: &CStr, _set_id: &CStr, _set_index: i32) {}
+        fn add_field_to_entry_set(&mut self, _cred_id: &CStr, _field_display_name: &CStr, _field_display_value: Option<&CStr>, _set_id: &CStr, _set_index: i32) {}
+        fn add_payment_entry_to_set_v2(&mut self, _cred_id: &CStr, _merchant_name: &CStr, _title: &CStr, _subtitle: Option<&CStr>, _icon: Option<&[u8]>, _transaction_amount: &CStr, _additional_info: Option<&CStr>, _metadata: &CStr, _set_id: &CStr, _set_index: i32) {}
+        fn add_inline_issuance_entry(&mut self, _cred_id: &CStr, _icon: Option<&[u8]>, _title: Option<&CStr>, _subtitle: Option<&CStr>) {}
+        fn add_metadata_display_text_to_entry_set(&mut self, _cred_id: &CStr, _metadata_display_text: &CStr, _set_id: &CStr, _set_index: i32) {}
+
         fn add_string_id_entry(
             &mut self,
             entry_id: &CStr,
