@@ -132,7 +132,8 @@ impl<T: SerJson> SerJson for DeterministicSet<T> {
 #[derive(Debug, Clone, PartialEq)]
 pub enum JsonValue {
     String(String),
-    Number(f64),
+    Integer(i64),
+    Float(f64),
     Bool(bool),
     Null,
     Array(Vec<JsonValue>),
@@ -158,15 +159,15 @@ impl DeJson for JsonValue {
             }
             nanoserde::DeJsonTok::F64(n) => {
                 state.next_tok(input)?;
-                Ok(JsonValue::Number(n))
+                Ok(JsonValue::Float(n))
             }
             nanoserde::DeJsonTok::U64(n) => {
                 state.next_tok(input)?;
-                Ok(JsonValue::Number(n as f64))
+                Ok(JsonValue::Integer(n as i64))
             }
             nanoserde::DeJsonTok::I64(n) => {
                 state.next_tok(input)?;
-                Ok(JsonValue::Number(n as f64))
+                Ok(JsonValue::Integer(n))
             }
             nanoserde::DeJsonTok::Bool(b) => {
                 state.next_tok(input)?;
@@ -200,7 +201,8 @@ impl SerJson for JsonValue {
     fn ser_json(&self, d: usize, s: &mut nanoserde::SerJsonState) {
         match self {
             JsonValue::String(v) => v.ser_json(d, s),
-            JsonValue::Number(v) => v.ser_json(d, s),
+            JsonValue::Integer(v) => v.ser_json(d, s),
+            JsonValue::Float(v) => v.ser_json(d, s),
             JsonValue::Bool(v) => v.ser_json(d, s),
             JsonValue::Null => s.out.push_str("null"),
             JsonValue::Array(v) => v.ser_json(d, s),

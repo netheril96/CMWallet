@@ -138,7 +138,8 @@ pub fn openid4vp_main(credman: &mut impl CredmanApi) -> Result<(), Box<dyn std::
 fn serialize_json_value(val: &JsonValue) -> String {
     match val {
         JsonValue::String(s) => format!("\"{}\"", s.replace('"', "\\\"")),
-        JsonValue::Number(n) => n.to_string(),
+        JsonValue::Integer(n) => n.to_string(),
+        JsonValue::Float(n) => n.to_string(),
         JsonValue::Bool(b) => b.to_string(),
         JsonValue::Null => "null".to_string(),
         JsonValue::Array(arr) => {
@@ -887,7 +888,10 @@ mod test {
                     && arr.iter().all(|item| {
                         if let JsonValue::Array(pair) = item {
                             pair.len() == 2
-                                && matches!(pair[0], JsonValue::Number(_))
+                                && matches!(
+                                    pair[0],
+                                    JsonValue::Integer(_) | JsonValue::Float(_)
+                                )
                                 && matches!(pair[1], JsonValue::Object(_))
                         } else {
                             false
@@ -900,8 +904,14 @@ mod test {
                         if let JsonValue::Array(mut pair) = item {
                             let val = pair.pop().unwrap();
                             let key = pair.pop().unwrap();
-                            if let JsonValue::Number(k) = key {
-                                obj.insert(k.to_string(), normalize_json(val));
+                            match key {
+                                JsonValue::Integer(k) => {
+                                    obj.insert(k.to_string(), normalize_json(val));
+                                }
+                                JsonValue::Float(k) => {
+                                    obj.insert(k.to_string(), normalize_json(val));
+                                }
+                                _ => {}
                             }
                         }
                     }
