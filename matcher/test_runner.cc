@@ -8,6 +8,8 @@
 #include <iostream>
 #include <algorithm>
 #include <cmath>
+#include <fstream>
+#include <iomanip>
 
 extern "C" {
 #include "cJSON/cJSON.h"
@@ -28,6 +30,14 @@ enum class EntryType {
     Export
 };
 
+NLOHMANN_JSON_SERIALIZE_ENUM(EntryType, {
+    {EntryType::Verification, "Verification"},
+    {EntryType::InlineIssuance, "InlineIssuance"},
+    {EntryType::Payment, "Payment"},
+    {EntryType::UserInfo, "UserInfo"},
+    {EntryType::Export, "Export"}
+})
+
 struct FakeEntry {
     std::string credId;
     EntryType type;
@@ -42,12 +52,36 @@ struct FakeEntry {
     std::string additional_info;
 };
 
+void to_json(json& j, const FakeEntry& e) {
+    j = json{
+        {"credId", e.credId},
+        {"type", e.type},
+        {"title", e.title},
+        {"subtitle", e.subtitle},
+        {"disclaimer", e.disclaimer},
+        {"warning", e.warning},
+        {"metadata_display_text", e.metadata_display_text},
+        {"fields", e.fields},
+        {"merchant_name", e.merchant_name},
+        {"transaction_amount", e.transaction_amount},
+        {"additional_info", e.additional_info}
+    };
+}
+
 struct FakeEntrySet {
     std::string setId;
     int setLength;
     // setIndex -> credId -> entry
     std::map<int, std::map<std::string, FakeEntry>> entries;
 };
+
+void to_json(json& j, const FakeEntrySet& s) {
+    j = json{
+        {"setId", s.setId},
+        {"setLength", s.setLength},
+        {"entries", s.entries}
+    };
+}
 
 class FakeCredman {
 public:
@@ -59,20 +93,40 @@ public:
     void Reset() {
         entrySets.clear();
         standaloneEntries.clear();
-        wasmVersion = 1;
+        wasmVersion = 9999;
         requestJson = "";
         credentialsBlob.clear();
     }
 
     std::map<std::string, FakeEntrySet> entrySets;
     std::vector<FakeEntry> standaloneEntries;
-    uint32_t wasmVersion = 1;
+    uint32_t wasmVersion = 9999;
     std::string requestJson;
     std::vector<uint8_t> credentialsBlob;
 
 private:
     FakeCredman() = default;
 };
+
+void to_json(json& j, const FakeCredman& c) {
+    j = json{
+        {"entrySets", c.entrySets},
+        {"standaloneEntries", c.standaloneEntries}
+    };
+}
+
+std::string ReadFileToString(const std::string& path) {
+    std::ifstream t(path);
+    if (!t.is_open()) return "";
+    std::string str((std::istreambuf_iterator<char>(t)),
+                    std::istreambuf_iterator<char>());
+    return str;
+}
+
+void WriteStringToFile(const std::string& path, const std::string& content) {
+    std::ofstream out(path);
+    out << content;
+}
 
 // --- Mocked ACM APIs (extern "C") ---
 extern "C" {
@@ -178,193 +232,30 @@ std::vector<uint8_t> CreateRegistryBlob(const std::string& jsonStr) {
     return blob;
 }
 
-const std::string MOCK_REGISTRY_JSON = R"({
-  "credentials": {
-    "mso_mdoc": {
-      "org.iso.18013.5.1.mDL": [
-        {
-          "id": "mdoc_cred_1",
-          "display": {
-            "verification": {
-              "title": "John's Driving License",
-              "icon": { "start": 4, "length": 10 }
-            }
-          },
-          "paths": {
-            "org.iso.18013.5.1": {
-              "family_name": { "value": "Doe", "display": { "verification": { "display": "Family Name" } } },
-              "given_name": { "value": "John", "display": { "verification": { "display": "Given Name" } } },
-              "age": { "value": 21, "display": { "verification": { "display": "Age" } } },
-              "age_over_21": { "value": true, "display": { "verification": { "display": "Over 21" } } }
-            }
-          }
-        },
-        {
-          "id": "mdoc_cred_underage",
-          "display": {
-            "verification": {
-              "title": "Underage License",
-              "icon": { "start": 4, "length": 10 }
-            }
-          },
-          "paths": {
-            "org.iso.18013.5.1": {
-              "age": { "value": 18, "display": { "verification": { "display": "Age" } } },
-              "age_over_21": { "value": false, "display": { "verification": { "display": "Over 21" } } }
-            }
-          }
-        },
-        {
-          "id": "mdoc_cred_3",
-          "display": {
-            "verification": {
-              "title": "Alice's Driving License",
-              "icon": { "start": 4, "length": 10 }
-            }
-          },
-          "paths": {
-            "org.iso.18013.5.1": {
-              "family_name": { "value": "Smith", "display": { "verification": { "display": "Family Name" } } },
-              "given_name": { "value": "Alice", "display": { "verification": { "display": "Given Name" } } },
-              "age": { "value": 25, "display": { "verification": { "display": "Age" } } },
-              "age_over_21": { "value": true, "display": { "verification": { "display": "Over 21" } } }
-            }
-          }
-        },
-        {
-          "id": "mdoc_cred_4",
-          "display": {
-            "verification": {
-              "title": "Jane's Driving License",
-              "icon": { "start": 4, "length": 10 }
-            }
-          },
-          "paths": {
-            "org.iso.18013.5.1": {
-              "family_name": { "value": "Doe", "display": { "verification": { "display": "Family Name" } } },
-              "given_name": { "value": "Jane", "display": { "verification": { "display": "Given Name" } } },
-              "age": { "value": 30, "display": { "verification": { "display": "Age" } } },
-              "age_over_21": { "value": true, "display": { "verification": { "display": "Over 21" } } }
-            }
-          }
-        }
-      ]
-    },
-    "dc+sd-jwt": {
-      "urn:eu.europa.ec.eudi:pid:1": [
-        {
-          "id": "sdjwt_cred_1",
-          "display": {
-            "verification": {
-              "title": "My EU PID",
-              "icon": { "start": 4, "length": 10 }
-            }
-          },
-          "paths": {
-            "user": {
-              "address": {
-                "locality": { "value": "Brussels", "display": { "verification": { "display": "City", "display_value": "Brussels" } } },
-                "country": { "value": "BE", "display": { "verification": { "display": "Country", "display_value": "Belgium" } } }
-              },
-              "name": {
-                "first": { "value": "Jane", "display": { "verification": { "display": "First Name", "display_value": "Jane" } } }
-              }
-            }
-          }
-        }
-      ],
-      "https://credentials.example.com/identity_credential": [
-        {
-          "id": "sdjwt_spec_pid",
-          "display": { "verification": { "title": "Spec PID", "icon": { "start": 4, "length": 10 } } },
-          "paths": {
-            "given_name": { "value": "Alice", "display": { "verification": { "display": "Given Name" } } },
-            "family_name": { "value": "Smith", "display": { "verification": { "display": "Family Name" } } },
-            "address": {
-              "street_address": { "value": "123 Spec St", "display": { "verification": { "display": "Street" } } }
-            }
-          }
-        }
-      ],
-      "https://othercredentials.example/pid": [
-        {
-          "id": "sdjwt_spec_other_pid",
-          "display": { "verification": { "title": "Other PID", "icon": { "start": 4, "length": 10 } } },
-          "paths": {
-            "given_name": { "value": "Bob", "display": { "verification": { "display": "Given Name" } } },
-            "family_name": { "value": "Jones", "display": { "verification": { "display": "Family Name" } } },
-            "address": {
-              "street_address": { "value": "456 Other St", "display": { "verification": { "display": "Street" } } }
-            }
-          }
-        }
-      ],
-      "https://credentials.example.com/reduced_identity_credential": [
-        {
-          "id": "sdjwt_spec_reduced_1",
-          "display": { "verification": { "title": "Reduced PID", "icon": { "start": 4, "length": 10 } } },
-          "paths": {
-            "given_name": { "value": "Charlie", "display": { "verification": { "display": "Given Name" } } },
-            "family_name": { "value": "Brown", "display": { "verification": { "display": "Family Name" } } }
-          }
-        }
-      ],
-      "https://cred.example/residence_credential": [
-        {
-          "id": "sdjwt_spec_reduced_2",
-          "display": { "verification": { "title": "Residence Cred", "icon": { "start": 4, "length": 10 } } },
-          "paths": {
-            "postal_code": { "value": "12345", "display": { "verification": { "display": "Zip" } } },
-            "locality": { "value": "Townsville", "display": { "verification": { "display": "City" } } },
-            "region": { "value": "State", "display": { "verification": { "display": "Region" } } }
-          }
-        }
-      ],
-      "https://company.example/company_rewards": [
-        {
-          "id": "sdjwt_spec_rewards",
-          "display": { "verification": { "title": "Rewards", "icon": { "start": 4, "length": 10 } } },
-          "paths": {
-            "rewards_number": { "value": "9999", "display": { "verification": { "display": "Rewards No" } } }
-          }
-        }
-      ]
-    },
-    "issuance": {
-      "mso_mdoc": [
-        {
-          "id": "issuance_mdl_1",
-          "title": "Get a New mDL",
-          "subtitle": "From your local DMV",
-          "icon": { "start": 4, "length": 10 },
-          "supported": [ "org.iso.18013.5.1.mDL" ]
-        }
-      ],
-      "dc+sd-jwt": [
-        {
-          "id": "issuance_pid_1",
-          "title": "Get a New EU PID",
-          "subtitle": "Official Digital ID",
-          "icon": { "start": 4, "length": 10 },
-          "supported": [ "urn:eu.europa.ec.eudi:pid:1" ]
-        }
-      ]
-    }
-  }
-})";
-
-void RunRequest(const json& dcql_query, uint32_t wasm_version = 2) {
+void RunTest(const std::string& test_name, const std::string& custom_registry = "") {
     FakeCredman::GetInstance().Reset();
-    FakeCredman::GetInstance().wasmVersion = wasm_version;
-    FakeCredman::GetInstance().credentialsBlob = CreateRegistryBlob(MOCK_REGISTRY_JSON);
+    std::string registry_json_str = custom_registry.empty() ? ReadFileToString("testdata/registry.json") : custom_registry;
+    FakeCredman::GetInstance().credentialsBlob = CreateRegistryBlob(registry_json_str);
     
-    json request = {{"requests", {{
-        {"protocol", "openid4vp-v1-unsigned"},
-        {"data", {{"dcql_query", dcql_query}}}
-    }}}};
-    FakeCredman::GetInstance().requestJson = request.dump();
+    std::string loaded_request = ReadFileToString("testdata/" + test_name + "_request.json");
+    // Ensure we parse and dump to normalize, or just use it directly. The original code used dump()
+    FakeCredman::GetInstance().requestJson = json::parse(loaded_request).dump();
+    
+    const char* generate_env = std::getenv("GENERATE_TESTDATA");
+    bool generate = generate_env && std::string(generate_env) == "1";
+
     openid4vp_main();
+    
+    json result_json = FakeCredman::GetInstance();
+    if (generate) {
+        WriteStringToFile("testdata/" + test_name + "_expected.json", result_json.dump(2));
+    } else {
+        std::string loaded_expected = ReadFileToString("testdata/" + test_name + "_expected.json");
+        CHECK(json::parse(loaded_expected) == result_json);
+    }
 }
+
+
 
 // --- Group 1: Base64-URL Decoding ---
 TEST_CASE("TC01_DecodeEmptyString") {
@@ -416,239 +307,132 @@ TEST_CASE("TC06_DecodeInvalidChars") {
 
 // --- Group 2: DCQL Query & Matching ---
 TEST_CASE("TC07_MdocMatch") {
-    RunRequest(json::parse(R"({"credentials": [{"id": "mdl", "format": "mso_mdoc", "meta": {"doctype_value": "org.iso.18013.5.1.mDL"}}]})"));
-    CHECK(!FakeCredman::GetInstance().entrySets.empty());
-    auto& set = FakeCredman::GetInstance().entrySets.begin()->second;
-    CHECK(set.entries[0].count("mdoc_cred_1"));
-    CHECK(set.entries[0]["mdoc_cred_1"].type == EntryType::Verification);
+    RunTest("TC07_MdocMatch");
 }
 
 TEST_CASE("TC08_MdocMismatch") {
-    RunRequest(json::parse(R"({"credentials": [{"id": "mdl", "format": "mso_mdoc", "meta": {"doctype_value": "UNKNOWN"}}]})"));
-    CHECK(FakeCredman::GetInstance().entrySets.empty());
+    RunTest("TC08_MdocMismatch");
 }
 
 TEST_CASE("TC09_SdjwtMatch") {
-    RunRequest(json::parse(R"({"credentials": [{"id": "pid", "format": "dc+sd-jwt", "meta": {"vct_values": ["urn:eu.europa.ec.eudi:pid:1"]}}]})"));
-    CHECK(!FakeCredman::GetInstance().entrySets.empty());
-    auto& set = FakeCredman::GetInstance().entrySets.begin()->second;
-    CHECK(set.entries[0].count("sdjwt_cred_1"));
+    RunTest("TC09_SdjwtMatch");
 }
 
 TEST_CASE("TC10_SdjwtMismatch") {
-    RunRequest(json::parse(R"({"credentials": [{"id": "pid", "format": "dc+sd-jwt", "meta": {"vct_values": ["UNKNOWN"]}}]})"));
-    CHECK(FakeCredman::GetInstance().entrySets.empty());
+    RunTest("TC10_SdjwtMismatch");
 }
 
 TEST_CASE("TC11_InlineIssuanceFallback") {
-    RunRequest(json::parse(R"({"credentials": [{"id": "mdl", "format": "mso_mdoc", "meta": {"doctype_value": "org.iso.18013.5.1.mDL"}}], "offer": true})"));
-    CHECK(!FakeCredman::GetInstance().standaloneEntries.empty());
-    CHECK(FakeCredman::GetInstance().standaloneEntries[0].type == EntryType::InlineIssuance);
+    RunTest("TC11_InlineIssuanceFallback");
 }
 
 TEST_CASE("TC12_MissingFormat") {
-    RunRequest(json::parse(R"({"credentials": [{"id": "w3c", "format": "w3c_vc", "meta": {"vct_values": ["some_vct"]}}]})"));
-    CHECK(FakeCredman::GetInstance().entrySets.empty());
+    RunTest("TC12_MissingFormat");
 }
 
 TEST_CASE("TC13_ReturnAllClaims") {
-    RunRequest(json::parse(R"({"credentials": [{"id": "mdl", "format": "mso_mdoc", "meta": {"doctype_value": "org.iso.18013.5.1.mDL"}}]})"));
-    auto& entry = FakeCredman::GetInstance().entrySets.begin()->second.entries[0]["mdoc_cred_1"];
-    CHECK(entry.fields.size() == 4);
+    RunTest("TC13_ReturnAllClaims");
 }
 
 TEST_CASE("TC14_MatchSpecificClaims") {
-    RunRequest(json::parse(R"({"credentials": [{"id": "mdl", "format": "mso_mdoc", "meta": {"doctype_value": "org.iso.18013.5.1.mDL"}, "claims": [{"path": ["org.iso.18013.5.1", "family_name"]}]}]})"));
-    auto& entry = FakeCredman::GetInstance().entrySets.begin()->second.entries[0]["mdoc_cred_1"];
-    CHECK(entry.fields.size() == 1);
-    CHECK(entry.fields[0].first == "Family Name");
+    RunTest("TC14_MatchSpecificClaims");
 }
 
 TEST_CASE("TC15_MatchNestedClaims") {
-    RunRequest(json::parse(R"({"credentials": [{"id": "pid", "format": "dc+sd-jwt", "meta": {"vct_values": ["urn:eu.europa.ec.eudi:pid:1"]}, "claims": [{"path": ["user", "address", "locality"]}]}]})"));
-    auto& entry = FakeCredman::GetInstance().entrySets.begin()->second.entries[0]["sdjwt_cred_1"];
-    CHECK(entry.fields.size() == 1);
-    CHECK(entry.fields[0].first == "City");
-    CHECK(entry.fields[0].second == "Brussels");
+    RunTest("TC15_MatchNestedClaims");
 }
 
 TEST_CASE("TC16_FailMissingClaims") {
-    RunRequest(json::parse(R"({"credentials": [{"id": "pid", "format": "dc+sd-jwt", "meta": {"vct_values": ["urn:eu.europa.ec.eudi:pid:1"]}, "claims": [{"path": ["unknown", "claim"]}]}]})"));
-    CHECK(FakeCredman::GetInstance().entrySets.empty());
+    RunTest("TC16_FailMissingClaims");
 }
 
 TEST_CASE("TC17_MatchClaimValuesBool") {
-    RunRequest(json::parse(R"({"credentials": [{"id": "mdl", "format": "mso_mdoc", "meta": {"doctype_value": "org.iso.18013.5.1.mDL"}, "claims": [{"path": ["org.iso.18013.5.1", "age_over_21"], "values": [true]}]}]})"));
-    auto& set = FakeCredman::GetInstance().entrySets.begin()->second;
-    CHECK(set.entries[0].count("mdoc_cred_1"));
+    RunTest("TC17_MatchClaimValuesBool");
 }
 
 TEST_CASE("TC18_FailClaimValuesBool") {
-    RunRequest(json::parse(R"({"credentials": [{"id": "mdl", "format": "mso_mdoc", "meta": {"doctype_value": "org.iso.18013.5.1.mDL"}, "claims": [{"path": ["org.iso.18013.5.1", "age_over_21"], "values": [false]}]}]})"));
-    auto& set = FakeCredman::GetInstance().entrySets.begin()->second;
-    CHECK(set.entries[0].count("mdoc_cred_underage"));
-    CHECK(!set.entries[0].count("mdoc_cred_1"));
+    RunTest("TC18_FailClaimValuesBool");
 }
 
 TEST_CASE("TC19_MatchClaimValuesInt") {
-    RunRequest(json::parse(R"({"credentials": [{"id": "mdl", "format": "mso_mdoc", "meta": {"doctype_value": "org.iso.18013.5.1.mDL"}, "claims": [{"path": ["org.iso.18013.5.1", "age"], "values": [21, 22]}]}]})"));
-    auto& set = FakeCredman::GetInstance().entrySets.begin()->second;
-    CHECK(set.entries[0].count("mdoc_cred_1"));
+    RunTest("TC19_MatchClaimValuesInt");
 }
 
 TEST_CASE("TC20_FailClaimValuesInt") {
-    RunRequest(json::parse(R"({"credentials": [{"id": "mdl", "format": "mso_mdoc", "meta": {"doctype_value": "org.iso.18013.5.1.mDL"}, "claims": [{"path": ["org.iso.18013.5.1", "age"], "values": [100]}]}]})"));
-    CHECK(FakeCredman::GetInstance().entrySets.empty());
+    RunTest("TC20_FailClaimValuesInt");
 }
 
 TEST_CASE("TC21_MatchFirstClaimSet") {
-    RunRequest(json::parse(R"({"credentials": [{"id": "mdl", "format": "mso_mdoc", "meta": {"doctype_value": "org.iso.18013.5.1.mDL"}, "claims": [{"id": "given_name", "path": ["org.iso.18013.5.1", "given_name"]}, {"id": "unknown", "path": ["org.iso.18013.5.1", "unknown"]}], "claim_sets": [["given_name"], ["unknown"]]}]})"));
-    CHECK(!FakeCredman::GetInstance().entrySets.empty());
+    RunTest("TC21_MatchFirstClaimSet");
 }
 
 TEST_CASE("TC22_MatchSecondClaimSet") {
-    RunRequest(json::parse(R"({"credentials": [{"id": "mdl", "format": "mso_mdoc", "meta": {"doctype_value": "org.iso.18013.5.1.mDL"}, "claims": [{"id": "unknown", "path": ["org.iso.18013.5.1", "unknown"]}, {"id": "given_name", "path": ["org.iso.18013.5.1", "given_name"]}], "claim_sets": [["unknown"], ["given_name"]]}]})"));
-    CHECK(!FakeCredman::GetInstance().entrySets.empty());
+    RunTest("TC22_MatchSecondClaimSet");
 }
 
 TEST_CASE("TC23_FailAllClaimSets") {
-    RunRequest(json::parse(R"({"credentials": [{"id": "mdl", "format": "mso_mdoc", "meta": {"doctype_value": "org.iso.18013.5.1.mDL"}, "claims": [{"id": "unknown", "path": ["org.iso.18013.5.1", "unknown"]}, {"id": "another_unknown", "path": ["org.iso.18013.5.1", "another_unknown"]}], "claim_sets": [["unknown"], ["another_unknown"]]}]})"));
-    CHECK(FakeCredman::GetInstance().entrySets.empty());
+    RunTest("TC23_FailAllClaimSets");
 }
 
 TEST_CASE("TC24_DcqlQuerySingle") {
-    RunRequest(json::parse(R"({"credentials": [{"id": "mdl", "format": "mso_mdoc", "meta": {"doctype_value": "org.iso.18013.5.1.mDL"}}]})"), 2);
-    CHECK(FakeCredman::GetInstance().entrySets.size() == 1);
-    auto& set = FakeCredman::GetInstance().entrySets.begin()->second;
-    CHECK(set.setLength == 1);
+    RunTest("TC24_DcqlQuerySingle");
 }
 
 TEST_CASE("TC25_DcqlQuerySetMatch") {
-    RunRequest(json::parse(R"({"credentials": [{"id": "pid", "format": "dc+sd-jwt", "meta": {"vct_values": ["urn:eu.europa.ec.eudi:pid:1"]}}], "credential_sets": [{"options": [["pid"]]}]})"), 2);
-    CHECK(!FakeCredman::GetInstance().entrySets.empty());
+    RunTest("TC25_DcqlQuerySetMatch");
 }
 
 TEST_CASE("TC26_DcqlQuerySetFailRequired") {
-    RunRequest(json::parse(R"({"credentials": [{"id": "pid", "format": "dc+sd-jwt", "meta": {"vct_values": ["UNKNOWN"]}}], "credential_sets": [{"required": true, "options": [["pid"]]}]})"), 2);
-    CHECK(FakeCredman::GetInstance().entrySets.empty());
+    RunTest("TC26_DcqlQuerySetFailRequired");
 }
 
 TEST_CASE("TC27_DcqlQuerySetFailOptional") {
-    RunRequest(json::parse(R"({"credentials": [{"id": "mdl", "format": "mso_mdoc", "meta": {"doctype_value": "org.iso.18013.5.1.mDL"}}, {"id": "pid", "format": "dc+sd-jwt", "meta": {"vct_values": ["UNKNOWN"]}}], "credential_sets": [{"required": true, "options": [["mdl"]]}, {"required": false, "options": [["pid"]]}]})"), 2);
-    CHECK(!FakeCredman::GetInstance().entrySets.empty());
+    RunTest("TC27_DcqlQuerySetFailOptional");
 }
 
 TEST_CASE("TC28_DcqlQueryComplexOverlappingSets") {
-    RunRequest(json::parse(R"({"credentials": [{"id": "mdl1", "format": "mso_mdoc", "meta": {"doctype_value": "org.iso.18013.5.1.mDL"}, "claims": [{"path": ["org.iso.18013.5.1", "given_name"], "values": ["John"]}]}, {"id": "mdl2", "format": "mso_mdoc", "meta": {"doctype_value": "org.iso.18013.5.1.mDL"}, "claims": [{"path": ["org.iso.18013.5.1", "given_name"], "values": ["Jane"]}]}, {"id": "mdl3", "format": "mso_mdoc", "meta": {"doctype_value": "org.iso.18013.5.1.mDL"}, "claims": [{"path": ["org.iso.18013.5.1", "family_name"], "values": ["Doe"]}]}], "credential_sets": [{"options": [["mdl1", "mdl3"], ["mdl2", "mdl3"], ["mdl1", "mdl2"]]}]})"), 2);
-    CHECK(!FakeCredman::GetInstance().entrySets.empty());
+    RunTest("TC28_DcqlQueryComplexOverlappingSets");
 }
 
 TEST_CASE("TC29_DcqlQueryOpenID4VPSpecExample") {
-    RunRequest(json::parse(R"({"credentials": [{"id": "pid", "format": "dc+sd-jwt", "meta": {"vct_values": ["https://credentials.example.com/identity_credential"]}, "claims": [{"path": ["given_name"]}, {"path": ["family_name"]}, {"path": ["address", "street_address"]}]}, {"id": "other_pid", "format": "dc+sd-jwt", "meta": {"vct_values": ["https://othercredentials.example/pid"]}, "claims": [{"path": ["given_name"]}, {"path": ["family_name"]}, {"path": ["address", "street_address"]}]}, {"id": "pid_reduced_cred_1", "format": "dc+sd-jwt", "meta": {"vct_values": ["https://credentials.example.com/reduced_identity_credential"]}, "claims": [{"path": ["family_name"]}, {"path": ["given_name"]}]}, {"id": "pid_reduced_cred_2", "format": "dc+sd-jwt", "meta": {"vct_values": ["https://cred.example/residence_credential"]}, "claims": [{"path": ["postal_code"]}, {"path": ["locality"]}, {"path": ["region"]}]}, {"id": "nice_to_have", "format": "dc+sd-jwt", "meta": {"vct_values": ["https://company.example/company_rewards"]}, "claims": [{"path": ["rewards_number"]}]}], "credential_sets": [{"options": [["pid"], ["other_pid"], ["pid_reduced_cred_1", "pid_reduced_cred_2"]]}, {"required": false, "options": [["nice_to_have"]]}]})"), 2);
-    CHECK(!FakeCredman::GetInstance().entrySets.empty());
+    RunTest("TC29_DcqlQueryOpenID4VPSpecExample");
 }
 
 // --- Group 3: Protocol Parsing & Integration ---
 TEST_CASE("TC30_ParseV1Unsigned") {
-    RunRequest(json::parse(R"({"credentials": [{"id": "mdl", "format": "mso_mdoc", "meta": {"doctype_value": "org.iso.18013.5.1.mDL"}}]})"));
-    CHECK(!FakeCredman::GetInstance().entrySets.empty());
+    RunTest("TC30_ParseV1Unsigned");
 }
 
 TEST_CASE("TC31_ParseV1Signed") {
-    std::string b64_payload = "eyJkY3FsX3F1ZXJ5Ijp7ImNyZWRlbnRpYWxzIjpbeyJmb3JtYXQiOiJtc29fbWRvYyIsImlkIjoibWRsIiwibWV0YSI6eyJkb2N0eXBlX3ZhbHVlIjoib3JnLmlzby4xODAxMy41LjEubURMIn19XX19";
-    FakeCredman::GetInstance().Reset();
-    FakeCredman::GetInstance().wasmVersion = 2;
-    FakeCredman::GetInstance().credentialsBlob = CreateRegistryBlob(MOCK_REGISTRY_JSON);
-    json request = json::parse(R"({"requests": [{"protocol": "openid4vp-v1-signed", "data": {"request": "header.)" + b64_payload + R"(.signature"}}]})");
-    FakeCredman::GetInstance().requestJson = request.dump();
-    openid4vp_main();
-    CHECK(!FakeCredman::GetInstance().entrySets.empty());
+    RunTest("TC31_ParseV1Signed");
 }
 
-std::string B64_PAYMENT_SCA1 = "eyJ0eXBlIjoidXJuOmV1ZGk6c2NhOnBheW1lbnQ6MSIsInBheWxvYWQiOnsicGF5ZWUiOnsibmFtZSI6Ik1lcmNoYW50IFgifSwiYW1vdW50X2Rpc3BsYXkiOiJFVVIgNTAuMDAifSwiY3JlZGVudGlhbF9pZHMiOlsibWRsIl19";
-
 TEST_CASE("TC32_ExtractPaymentSca1") {
-    FakeCredman::GetInstance().Reset();
-    FakeCredman::GetInstance().credentialsBlob = CreateRegistryBlob(MOCK_REGISTRY_JSON);
-    FakeCredman::GetInstance().wasmVersion = 3;
-    json request = json::parse(R"({"requests": [{"protocol": "openid4vp-v1-unsigned", "data": {"dcql_query": {"credentials": [{"id": "mdl", "format": "mso_mdoc", "meta": {"doctype_value": "org.iso.18013.5.1.mDL"}}]}, "transaction_data": [")" + B64_PAYMENT_SCA1 + R"("]}}]})");
-    FakeCredman::GetInstance().requestJson = request.dump();
-    openid4vp_main();
-    auto& set = FakeCredman::GetInstance().entrySets.begin()->second;
-    auto& entry = set.entries[0]["mdoc_cred_1"];
-    CHECK(entry.type == EntryType::Payment);
-    CHECK(entry.merchant_name == "Merchant X");
-    CHECK(entry.transaction_amount == "EUR 50.00");
+    RunTest("TC32_ExtractPaymentSca1");
 }
 
 TEST_CASE("TC33_ExtractPaymentDetails") {
-    std::string b64 = "eyJ0eXBlIjoicGF5bWVudF9kZXRhaWxzIiwicGF5ZWVfbmFtZSI6Ik1lcmNoYW50IFkiLCJwYXltZW50X2Ftb3VudCI6IjEwLjAwIiwicGF5bWVudF9jdXJyZW5jeSI6IlVTRCIsImNyZWRlbnRpYWxfaWRzIjpbIm1kbCJdfQ==";
-    FakeCredman::GetInstance().Reset();
-    FakeCredman::GetInstance().credentialsBlob = CreateRegistryBlob(MOCK_REGISTRY_JSON);
-    FakeCredman::GetInstance().wasmVersion = 3;
-    json request = json::parse(R"({"requests": [{"protocol": "openid4vp-v1-unsigned", "data": {"dcql_query": {"credentials": [{"id": "mdl", "format": "mso_mdoc", "meta": {"doctype_value": "org.iso.18013.5.1.mDL"}}]}, "transaction_data": [")" + b64 + R"("]}}]})");
-    FakeCredman::GetInstance().requestJson = request.dump();
-    openid4vp_main();
-    auto& set = FakeCredman::GetInstance().entrySets.begin()->second;
-    auto& entry = set.entries[0]["mdoc_cred_1"];
-    CHECK(entry.type == EntryType::Payment);
-    CHECK(entry.merchant_name == "Merchant Y");
-    CHECK(entry.transaction_amount == "USD 10.00");
+    RunTest("TC33_ExtractPaymentDetails");
 }
 
 TEST_CASE("TC34_ExtractPaymentGeneric") {
-    std::string b64 = "eyJtZXJjaGFudF9uYW1lIjoiTWVyY2hhbnQgWiIsImFtb3VudCI6IkZyZWUiLCJjcmVkZW50aWFsX2lkcyI6WyJtZGwiXX0=";
-    FakeCredman::GetInstance().Reset();
-    FakeCredman::GetInstance().credentialsBlob = CreateRegistryBlob(MOCK_REGISTRY_JSON);
-    FakeCredman::GetInstance().wasmVersion = 3;
-    json request = json::parse(R"({"requests": [{"protocol": "openid4vp-v1-unsigned", "data": {"dcql_query": {"credentials": [{"id": "mdl", "format": "mso_mdoc", "meta": {"doctype_value": "org.iso.18013.5.1.mDL"}}]}, "transaction_data": [")" + b64 + R"("]}}]})");
-    FakeCredman::GetInstance().requestJson = request.dump();
-    openid4vp_main();
-    auto& set = FakeCredman::GetInstance().entrySets.begin()->second;
-    auto& entry = set.entries[0]["mdoc_cred_1"];
-    CHECK(entry.type == EntryType::Payment);
-    CHECK(entry.merchant_name == "Merchant Z");
-    CHECK(entry.transaction_amount == "Free");
+    RunTest("TC34_ExtractPaymentGeneric");
 }
 
 TEST_CASE("TC35_WasmAddEntryToSet") {
-    RunRequest(json::parse(R"({"credentials": [{"id": "mdl", "format": "mso_mdoc", "meta": {"doctype_value": "org.iso.18013.5.1.mDL"}}]})"));
-    auto& entry = FakeCredman::GetInstance().entrySets.begin()->second.entries[0]["mdoc_cred_1"];
-    CHECK(entry.title == "John's Driving License");
+    RunTest("TC35_WasmAddEntryToSet");
 }
 
 TEST_CASE("TC36_WasmPaymentV2") {
-    FakeCredman::GetInstance().Reset();
-    FakeCredman::GetInstance().credentialsBlob = CreateRegistryBlob(MOCK_REGISTRY_JSON);
-    FakeCredman::GetInstance().wasmVersion = 3;
-    json request = json::parse(R"({"requests": [{"protocol": "openid4vp-v1-unsigned", "data": {"dcql_query": {"credentials": [{"id": "mdl", "format": "mso_mdoc", "meta": {"doctype_value": "org.iso.18013.5.1.mDL"}}]}, "transaction_data": [")" + B64_PAYMENT_SCA1 + R"("]}}]})");
-    FakeCredman::GetInstance().requestJson = request.dump();
-    openid4vp_main();
-    auto& set = FakeCredman::GetInstance().entrySets.begin()->second;
-    CHECK(set.entries[0]["mdoc_cred_1"].type == EntryType::Payment);
+    RunTest("TC36_WasmPaymentV2");
 }
 
-TEST_CASE("TC37_WasmPaymentV1") {
-    FakeCredman::GetInstance().Reset();
-    FakeCredman::GetInstance().credentialsBlob = CreateRegistryBlob(MOCK_REGISTRY_JSON);
-    FakeCredman::GetInstance().wasmVersion = 2;
-    json request = json::parse(R"({"requests": [{"protocol": "openid4vp-v1-unsigned", "data": {"dcql_query": {"credentials": [{"id": "mdl", "format": "mso_mdoc", "meta": {"doctype_value": "org.iso.18013.5.1.mDL"}}]}, "transaction_data": [")" + B64_PAYMENT_SCA1 + R"("]}}]})");
-    FakeCredman::GetInstance().requestJson = request.dump();
-    openid4vp_main();
-    auto& set = FakeCredman::GetInstance().entrySets.begin()->second;
-    CHECK(set.entries[0]["mdoc_cred_1"].type == EntryType::Payment);
-}
-
-TEST_CASE("TC38_WasmMetadataText") {
-    std::string registry_with_meta = MOCK_REGISTRY_JSON;
+TEST_CASE("TC37_WasmMetadataText") {
+    std::string registry_with_meta = ReadFileToString("testdata/registry.json");
     size_t pos = registry_with_meta.find("\"title\": \"John's Driving License\"");
-    registry_with_meta.insert(pos, "\"metadata_display_text\": \"Verified Member\", ");
-    FakeCredman::GetInstance().Reset();
-    FakeCredman::GetInstance().credentialsBlob = CreateRegistryBlob(registry_with_meta);
-    FakeCredman::GetInstance().wasmVersion = 5;
-    json request = json::parse(R"({"requests": [{"protocol": "openid4vp-v1-unsigned", "data": {"dcql_query": {"credentials": [{"id": "mdl", "format": "mso_mdoc", "meta": {"doctype_value": "org.iso.18013.5.1.mDL"}}]}}}]})");
-    FakeCredman::GetInstance().requestJson = request.dump();
-    openid4vp_main();
-    auto& entry = FakeCredman::GetInstance().entrySets.begin()->second.entries[0]["mdoc_cred_1"];
-    CHECK(entry.metadata_display_text == "Verified Member");
+    if (pos != std::string::npos) {
+        registry_with_meta.insert(pos, "\"metadata_display_text\": \"Verified Member\", ");
+    }
+    
+    RunTest("TC37_WasmMetadataText", registry_with_meta);
 }

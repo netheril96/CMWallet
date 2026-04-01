@@ -22,9 +22,9 @@ We will use the following explicit, hardcoded mock registry JSON that covers all
           },
           "paths": {
             "org.iso.18013.5.1": {
-              "family_name": { "value": "Doe", "display": { "verification": { "display": "Family Name" } } },
-              "given_name": { "value": "John", "display": { "verification": { "display": "Given Name" } } },
-              "age": { "value": 21, "display": { "verification": { "display": "Age" } } },
+              "family_name": { "value": "Doe", "display": { "verification": { "display": "Family Name", "display_value": "Doe" } } },
+              "given_name": { "value": "John", "display": { "verification": { "display": "Given Name", "display_value": "John" } } },
+              "age": { "value": 21, "display": { "verification": { "display": "Age", "display_value": "Yes" } } },
               "age_over_21": { "value": true, "display": { "verification": { "display": "Over 21" } } }
             }
           }
@@ -40,7 +40,7 @@ We will use the following explicit, hardcoded mock registry JSON that covers all
           "paths": {
             "org.iso.18013.5.1": {
               "age": { "value": 18, "display": { "verification": { "display": "Age" } } },
-              "age_over_21": { "value": false, "display": { "verification": { "display": "Over 21" } } }
+              "age_over_21": { "value": false, "display": { "verification": { "display": "Over 21", "display_value": "Yes"  } } }
             }
           }
         },
