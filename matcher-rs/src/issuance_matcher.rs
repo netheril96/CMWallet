@@ -7,19 +7,35 @@ use crate::openid4vci::RegularizedOpenId4VciRequestData;
 #[derive(DeJson, Debug)]
 pub enum OpenId4VciFilter {
     Unit {}, // A placeholder that always matches
-    And { filters: Vec<OpenId4VciFilter> },
-    Or { filters: Vec<OpenId4VciFilter> },
-    Not { filter: Box<OpenId4VciFilter> },
-    AllowsIssuers { issuers: DeterministicSet<String> },
-    AllowsConfigurationIds { configuration_ids: DeterministicSet<String> },
+    And {
+        filters: Vec<OpenId4VciFilter>,
+    },
+    Or {
+        filters: Vec<OpenId4VciFilter>,
+    },
+    Not {
+        filter: Box<OpenId4VciFilter>,
+    },
+    AllowsIssuers {
+        issuers: DeterministicSet<String>,
+    },
+    AllowsConfigurationIds {
+        configuration_ids: DeterministicSet<String>,
+    },
     SupportsAuthCodeFlow {},
     SupportsPreAuthFlow {},
     SupportsNonceEndpoint {},
     SupportsDeferredCredentialEndpoint {},
     SupportsNotificationEndpoint {},
-    RequiresBatchIssuance { min_batch_size: u32 },
-    SupportsMdocDoctype { doctypes: DeterministicSet<String> },
-    SupportsSdJwtVct { vcts: DeterministicSet<String> },
+    RequiresBatchIssuance {
+        min_batch_size: u32,
+    },
+    SupportsMdocDoctype {
+        doctypes: DeterministicSet<String>,
+    },
+    SupportsSdJwtVct {
+        vcts: DeterministicSet<String>,
+    },
 }
 
 impl Default for OpenId4VciFilter {

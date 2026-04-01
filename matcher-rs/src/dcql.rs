@@ -1,7 +1,10 @@
-use crate::json_value::{JsonValue, DeterministicMap};
+use crate::json_value::{DeterministicMap, JsonValue};
 pub use crate::openid4vp_models::*;
 
-pub fn add_all_claims(matched_claim_names: &mut Vec<JsonValue>, candidate_paths: &DeterministicMap<String, JsonValue>) {
+pub fn add_all_claims(
+    matched_claim_names: &mut Vec<JsonValue>,
+    candidate_paths: &DeterministicMap<String, JsonValue>,
+) {
     for value in candidate_paths.values() {
         match value {
             JsonValue::Object(obj) => {
@@ -40,7 +43,10 @@ fn add_all_claims_from_json(matched_claim_names: &mut Vec<JsonValue>, json: &Jso
 fn get_format_candidates<'a>(
     format: &str,
     registry: &'a Registry,
-) -> (Option<&'a DeterministicMap<String, Vec<RegistryCredential>>>, Option<&'a Vec<RegistryIssuanceEntry>>) {
+) -> (
+    Option<&'a DeterministicMap<String, Vec<RegistryCredential>>>,
+    Option<&'a Vec<RegistryIssuanceEntry>>,
+) {
     if format == "mso_mdoc" {
         (
             registry.credentials.mso_mdoc.as_ref(),
@@ -71,13 +77,20 @@ fn filter_candidates_by_meta<'a>(
                 if let Some(inline_cands) = inline_issuance_candidates {
                     for cand in inline_cands {
                         if cand.supported.contains(doctype) {
-                            log::debug!("Found matching inline issuance for doctype {}: {}", doctype, cand.id);
+                            log::debug!(
+                                "Found matching inline issuance for doctype {}: {}",
+                                doctype,
+                                cand.id
+                            );
                             inline_issuance = Some(cand.clone());
                             break;
                         }
                     }
                 }
-                candidates.and_then(|c| c.get(doctype)).map(|v| v.iter().collect()).unwrap_or_default()
+                candidates
+                    .and_then(|c| c.get(doctype))
+                    .map(|v| v.iter().collect())
+                    .unwrap_or_default()
             } else {
                 log::trace!("mso_mdoc requested but no doctype_value in meta");
                 Vec::new()
@@ -85,12 +98,19 @@ fn filter_candidates_by_meta<'a>(
         } else if format == "dc+sd-jwt" {
             let mut v = Vec::new();
             if !meta.vct_values.is_empty() {
-                log::trace!("Filtering dc+sd-jwt candidates by vcts: {:?}", meta.vct_values);
+                log::trace!(
+                    "Filtering dc+sd-jwt candidates by vcts: {:?}",
+                    meta.vct_values
+                );
                 for vct in &meta.vct_values {
                     if let Some(inline_cands) = inline_issuance_candidates {
                         for cand in inline_cands {
                             if cand.supported.contains(vct) {
-                                log::debug!("Found matching inline issuance for vct {}: {}", vct, cand.id);
+                                log::debug!(
+                                    "Found matching inline issuance for vct {}: {}",
+                                    vct,
+                                    cand.id
+                                );
                                 inline_issuance = Some(cand.clone());
                                 break;
                             }
@@ -106,7 +126,10 @@ fn filter_candidates_by_meta<'a>(
             Vec::new()
         }
     } else {
-        log::trace!("No meta provided, collecting all candidates for format {}", format);
+        log::trace!(
+            "No meta provided, collecting all candidates for format {}",
+            format
+        );
         let mut v = Vec::new();
         if let Some(c) = candidates {
             for cands in c.values() {
@@ -148,13 +171,22 @@ fn match_candidate_claims(
                         current_set_names.push(info.display.clone());
                         current_set_metadata.push(info.path.clone());
                     } else {
-                        log::trace!("Candidate {}: claim set index {} failed because claim {} did not match", candidate.id, idx, claim_id);
+                        log::trace!(
+                            "Candidate {}: claim set index {} failed because claim {} did not match",
+                            candidate.id,
+                            idx,
+                            claim_id
+                        );
                         all_matched = false;
                         break;
                     }
                 }
                 if all_matched {
-                    log::debug!("Candidate {}: matched claim set index {}", candidate.id, idx);
+                    log::debug!(
+                        "Candidate {}: matched claim set index {}",
+                        candidate.id,
+                        idx
+                    );
                     return Some(MatchedCredential {
                         id: candidate.id.clone(),
                         display: candidate.display.clone(),
@@ -166,14 +198,22 @@ fn match_candidate_claims(
             log::debug!("Candidate {}: no claim sets matched", candidate.id);
             None
         } else {
-            log::trace!("Candidate {}: matching all {} requested claims", candidate.id, claims_req.len());
+            log::trace!(
+                "Candidate {}: matching all {} requested claims",
+                candidate.id,
+                claims_req.len()
+            );
             let mut all_matched = true;
             for claim in claims_req {
                 if let Some(info) = match_claim(claim, &candidate.paths) {
                     matched_claim_names.push(info.display);
                     matched_claim_metadata.push(info.path);
                 } else {
-                    log::trace!("Candidate {}: claim path {:?} failed to match", candidate.id, claim.path);
+                    log::trace!(
+                        "Candidate {}: claim path {:?} failed to match",
+                        candidate.id,
+                        claim.path
+                    );
                     all_matched = false;
                     break;
                 }
@@ -191,7 +231,10 @@ fn match_candidate_claims(
             }
         }
     } else {
-        log::debug!("Candidate {}: no specific claims requested, matching all available claims", candidate.id);
+        log::debug!(
+            "Candidate {}: no specific claims requested, matching all available claims",
+            candidate.id
+        );
         add_all_claims(&mut matched_claim_names, &candidate.paths);
         Some(MatchedCredential {
             id: candidate.id.clone(),
@@ -203,15 +246,30 @@ fn match_candidate_claims(
 }
 
 pub fn match_credential(credential: &DcqlCredential, registry: &Registry) -> MatchCredentialResult {
-    log::debug!("Matching credential req id: {}, format: {}", credential.id, credential.format);
-    let (candidates, inline_issuance_candidates) = get_format_candidates(&credential.format, registry);
-    let (filtered_candidates, inline_issuance) = filter_candidates_by_meta(&credential.format, &credential.meta, candidates, inline_issuance_candidates);
+    log::debug!(
+        "Matching credential req id: {}, format: {}",
+        credential.id,
+        credential.format
+    );
+    let (candidates, inline_issuance_candidates) =
+        get_format_candidates(&credential.format, registry);
+    let (filtered_candidates, inline_issuance) = filter_candidates_by_meta(
+        &credential.format,
+        &credential.meta,
+        candidates,
+        inline_issuance_candidates,
+    );
 
-    log::debug!("Found {} potential candidates after meta filtering", filtered_candidates.len());
+    log::debug!(
+        "Found {} potential candidates after meta filtering",
+        filtered_candidates.len()
+    );
     let mut matched_creds = Vec::new();
 
     for candidate in filtered_candidates {
-        if let Some(matched) = match_candidate_claims(candidate, &credential.claims, &credential.claim_sets) {
+        if let Some(matched) =
+            match_candidate_claims(candidate, &credential.claims, &credential.claim_sets)
+        {
             matched_creds.push(matched);
         }
     }
@@ -222,7 +280,10 @@ pub fn match_credential(credential: &DcqlCredential, registry: &Registry) -> Mat
     }
 }
 
-fn match_claim(claim: &DcqlClaim, candidate_paths: &DeterministicMap<String, JsonValue>) -> Option<MatchedClaim> {
+fn match_claim(
+    claim: &DcqlClaim,
+    candidate_paths: &DeterministicMap<String, JsonValue>,
+) -> Option<MatchedClaim> {
     log::trace!("Matching claim path: {:?}", claim.path);
     let mut curr_val = None;
     for (i, p) in claim.path.iter().enumerate() {
@@ -232,7 +293,11 @@ fn match_claim(claim: &DcqlClaim, candidate_paths: &DeterministicMap<String, Jso
             if let Some(JsonValue::Object(obj)) = curr_val {
                 curr_val = obj.get(p);
             } else {
-                log::trace!("Claim path match failed at step {}: key {} not found or not an object", i, p);
+                log::trace!(
+                    "Claim path match failed at step {}: key {} not found or not an object",
+                    i,
+                    p
+                );
                 return None;
             }
         }
@@ -254,10 +319,18 @@ fn match_claim(claim: &DcqlClaim, candidate_paths: &DeterministicMap<String, Jso
                             path: claim.path.clone(),
                         });
                     } else {
-                        log::trace!("Claim value mismatch at {:?}. Expected one of {:?}, found {:?}", claim.path, claim.values, actual);
+                        log::trace!(
+                            "Claim value mismatch at {:?}. Expected one of {:?}, found {:?}",
+                            claim.path,
+                            claim.values,
+                            actual
+                        );
                     }
                 } else {
-                    log::trace!("Claim value missing at {:?}, but values constraint is present", claim.path);
+                    log::trace!(
+                        "Claim value missing at {:?}, but values constraint is present",
+                        claim.path
+                    );
                 }
                 return None;
             } else {
@@ -268,10 +341,16 @@ fn match_claim(claim: &DcqlClaim, candidate_paths: &DeterministicMap<String, Jso
                 });
             }
         } else {
-            log::trace!("Claim matched path but missing 'display' field at {:?}", claim.path);
+            log::trace!(
+                "Claim matched path but missing 'display' field at {:?}",
+                claim.path
+            );
         }
     } else {
-        log::trace!("Claim matched path but final node is not an object at {:?}", claim.path);
+        log::trace!(
+            "Claim matched path but final node is not an object at {:?}",
+            claim.path
+        );
     }
     None
 }
@@ -288,7 +367,11 @@ fn evaluate_explicit_credential_sets(
             log::trace!("Skipping optional credential_set index {}", set_idx);
             continue;
         }
-        log::debug!("Evaluating required credential_set index {} with {} options", set_idx, set.options.len());
+        log::debug!(
+            "Evaluating required credential_set index {} with {} options",
+            set_idx,
+            set.options.len()
+        );
         let mut curr_matched_options = Vec::new();
         for (opt_idx, option) in set.options.iter().enumerate() {
             let mut option_matched = true;
@@ -297,7 +380,12 @@ fn evaluate_explicit_credential_sets(
                 if candidate_matched_credentials.contains_key(cred_id) {
                     matched_cred_ids.push(cred_id.clone());
                 } else {
-                    log::trace!("Option {} in set {} failed because {} did not match", opt_idx, set_idx, cred_id);
+                    log::trace!(
+                        "Option {} in set {} failed because {} did not match",
+                        opt_idx,
+                        set_idx,
+                        cred_id
+                    );
                     option_matched = false;
                     break;
                 }
@@ -312,11 +400,18 @@ fn evaluate_explicit_credential_sets(
             }
         }
         if curr_matched_options.is_empty() {
-            log::info!("Required credential_set index {} failed to match any options", set_idx);
+            log::info!(
+                "Required credential_set index {} failed to match any options",
+                set_idx
+            );
             overall_matched = false;
             break;
         } else {
-            log::info!("Required credential_set index {} matched {} options", set_idx, curr_matched_options.len());
+            log::info!(
+                "Required credential_set index {} matched {} options",
+                set_idx,
+                curr_matched_options.len()
+            );
             matched_credential_sets.push(curr_matched_options);
         }
     }
@@ -329,7 +424,10 @@ fn evaluate_implicit_credential_sets(
 ) -> Vec<Vec<MatchedCredentialSetInfo>> {
     let mut matched_credential_sets = Vec::new();
     if credentials_req.len() == candidate_matched_credentials.len() {
-        log::info!("All {} credential requirements satisfied", credentials_req.len());
+        log::info!(
+            "All {} credential requirements satisfied",
+            credentials_req.len()
+        );
         let matched_cred_ids: Vec<String> = credentials_req.iter().map(|c| c.id.clone()).collect();
         let single_set_info = MatchedCredentialSetInfo {
             set_id: "".to_string(),
@@ -338,7 +436,11 @@ fn evaluate_implicit_credential_sets(
         };
         matched_credential_sets.push(vec![single_set_info]);
     } else {
-        log::info!("Implicit credential requirements failed: {} of {} satisfied", candidate_matched_credentials.len(), credentials_req.len());
+        log::info!(
+            "Implicit credential requirements failed: {} of {} satisfied",
+            candidate_matched_credentials.len(),
+            credentials_req.len()
+        );
         for req in credentials_req {
             if !candidate_matched_credentials.contains_key(&req.id) {
                 log::info!("Missing credential: {}", req.id);
@@ -349,14 +451,21 @@ fn evaluate_implicit_credential_sets(
 }
 
 pub fn dcql_query(query: &DcqlQuery, registry: &Registry) -> DcqlMatchResult {
-    log::info!("Starting DCQL query with {} credential requirements", query.credentials.len());
+    log::info!(
+        "Starting DCQL query with {} credential requirements",
+        query.credentials.len()
+    );
     let mut candidate_matched_credentials = DeterministicMap::new();
     let mut candidate_inline_issuance_credentials = DeterministicMap::new();
 
     for cred_req in &query.credentials {
         let res = match_credential(cred_req, registry);
         if !res.matched_creds.is_empty() {
-            log::info!("Credential requirement {} matched {} candidates", cred_req.id, res.matched_creds.len());
+            log::info!(
+                "Credential requirement {} matched {} candidates",
+                cred_req.id,
+                res.matched_creds.len()
+            );
             candidate_matched_credentials.insert(
                 cred_req.id.clone(),
                 DcqlMatchedCredentialEntry {
@@ -365,24 +474,43 @@ pub fn dcql_query(query: &DcqlQuery, registry: &Registry) -> DcqlMatchResult {
                 },
             );
         } else {
-            log::info!("Credential requirement {} matched 0 candidates", cred_req.id);
+            log::info!(
+                "Credential requirement {} matched 0 candidates",
+                cred_req.id
+            );
         }
         if let Some(inline) = res.inline_issuance {
-            log::info!("Credential requirement {} has inline issuance available: {}", cred_req.id, inline.id);
+            log::info!(
+                "Credential requirement {} has inline issuance available: {}",
+                cred_req.id,
+                inline.id
+            );
             candidate_inline_issuance_credentials.insert(cred_req.id.clone(), inline);
         }
     }
 
-    let (matched_credential_sets, overall_matched, inline_issuance) = if !query.credential_sets.is_empty() {
-        let (overall_matched, sets) = evaluate_explicit_credential_sets(&query.credential_sets, &candidate_matched_credentials);
+    let (matched_credential_sets, overall_matched, inline_issuance) = if !query
+        .credential_sets
+        .is_empty()
+    {
+        let (overall_matched, sets) = evaluate_explicit_credential_sets(
+            &query.credential_sets,
+            &candidate_matched_credentials,
+        );
         (sets, overall_matched, None)
     } else {
-        let sets = evaluate_implicit_credential_sets(&query.credentials, &candidate_matched_credentials);
-        
+        let sets =
+            evaluate_implicit_credential_sets(&query.credentials, &candidate_matched_credentials);
+
         let mut inline_issuance = None;
-        if query.credentials.len() == candidate_inline_issuance_credentials.len() && !candidate_inline_issuance_credentials.is_empty() {
+        if query.credentials.len() == candidate_inline_issuance_credentials.len()
+            && !candidate_inline_issuance_credentials.is_empty()
+        {
             log::info!("All requirements could be satisfied by inline issuance");
-            inline_issuance = candidate_inline_issuance_credentials.values().next().cloned();
+            inline_issuance = candidate_inline_issuance_credentials
+                .values()
+                .next()
+                .cloned();
         }
         let overall_matched = !sets.is_empty() || inline_issuance.is_some();
         (sets, overall_matched, inline_issuance)

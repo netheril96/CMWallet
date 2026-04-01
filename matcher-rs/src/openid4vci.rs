@@ -1,7 +1,7 @@
 #![allow(unused)]
 
-use nanoserde::DeJson;
 use crate::json_value::DeterministicMap;
+use nanoserde::DeJson;
 
 #[derive(DeJson, Debug, Default)]
 #[nserde(default)]
@@ -87,8 +87,8 @@ pub mod credential_offer {
 }
 
 mod credential_issuer_metadata {
-    use nanoserde::DeJson;
     use crate::json_value::{DeterministicMap, DeterministicSet};
+    use nanoserde::DeJson;
 
     #[derive(DeJson, Debug, Default)]
     #[nserde(default)]

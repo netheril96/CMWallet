@@ -114,7 +114,8 @@ impl CredmanApi for CredmanApiImpl {
         disclaimer: Option<&CStr>,
         warning: Option<&CStr>,
     ) {
-        let icon_bytes = icon.map_or(std::ptr::null(), |x| x.as_ptr()) as *const std::os::raw::c_char;
+        let icon_bytes =
+            icon.map_or(std::ptr::null(), |x| x.as_ptr()) as *const std::os::raw::c_char;
         let icon_length = icon.map_or(0, |x| x.len());
         unsafe {
             AddStringIdEntry(
@@ -145,7 +146,8 @@ impl CredmanApi for CredmanApiImpl {
         set_id: &CStr,
         set_index: i32,
     ) {
-        let icon_bytes = icon.map_or(std::ptr::null(), |x| x.as_ptr()) as *const std::os::raw::c_char;
+        let icon_bytes =
+            icon.map_or(std::ptr::null(), |x| x.as_ptr()) as *const std::os::raw::c_char;
         let icon_length = icon.map_or(0, |x| x.len());
         unsafe {
             AddEntryToSet(
@@ -195,13 +197,14 @@ impl CredmanApi for CredmanApiImpl {
         set_id: &CStr,
         set_index: i32,
     ) {
-        let icon_bytes =
-            payment_method_icon.map_or(std::ptr::null(), |x| x.as_ptr()) as *const std::os::raw::c_char;
+        let icon_bytes = payment_method_icon.map_or(std::ptr::null(), |x| x.as_ptr())
+            as *const std::os::raw::c_char;
         let icon_length = payment_method_icon.map_or(0, |x| x.len());
-        let bank_icon_bytes = bank_icon.map_or(std::ptr::null(), |x| x.as_ptr()) as *const std::os::raw::c_char;
+        let bank_icon_bytes =
+            bank_icon.map_or(std::ptr::null(), |x| x.as_ptr()) as *const std::os::raw::c_char;
         let bank_icon_length = bank_icon.map_or(0, |x| x.len());
-        let provider_icon_bytes =
-            payment_provider_icon.map_or(std::ptr::null(), |x| x.as_ptr()) as *const std::os::raw::c_char;
+        let provider_icon_bytes = payment_provider_icon.map_or(std::ptr::null(), |x| x.as_ptr())
+            as *const std::os::raw::c_char;
         let provider_icon_length = payment_provider_icon.map_or(0, |x| x.len());
 
         unsafe {
@@ -231,7 +234,8 @@ impl CredmanApi for CredmanApiImpl {
         title: Option<&CStr>,
         subtitle: Option<&CStr>,
     ) {
-        let icon_bytes = icon.map_or(std::ptr::null(), |x| x.as_ptr()) as *const std::os::raw::c_char;
+        let icon_bytes =
+            icon.map_or(std::ptr::null(), |x| x.as_ptr()) as *const std::os::raw::c_char;
         let icon_length = icon.map_or(0, |x| x.len());
         unsafe {
             AddInlineIssuanceEntry(

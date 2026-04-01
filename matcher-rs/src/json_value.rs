@@ -1,6 +1,6 @@
-use nanoserde::{DeJson, SerJson};
 use indexmap::{IndexMap, IndexSet};
-use rustc_hash::{FxBuildHasher};
+use nanoserde::{DeJson, SerJson};
+use rustc_hash::FxBuildHasher;
 
 pub type FastIndexMap<K, V> = IndexMap<K, V, FxBuildHasher>;
 pub type FastIndexSet<T> = IndexSet<T, FxBuildHasher>;

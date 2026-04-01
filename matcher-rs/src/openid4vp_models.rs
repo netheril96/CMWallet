@@ -1,5 +1,5 @@
+use crate::json_value::{DeterministicMap, JsonValue};
 use nanoserde::{DeJson, SerJson};
-use crate::json_value::{JsonValue, DeterministicMap};
 
 #[derive(DeJson, Debug, Clone, Default)]
 #[nserde(default)]
