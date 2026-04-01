@@ -153,7 +153,7 @@ mod credential_issuer_metadata {
         pub doctype: String,
         pub vct: String,
         pub credential_signing_alg_values_supported: Vec<String>,
-        pub cryptographic_binding_methods_supported: Option<Vec<String>>,
+        pub cryptographic_binding_methods_supported: Vec<String>,
         pub proof_types_supported: HashMap<String, ProofType>,
     }
 
@@ -167,7 +167,7 @@ mod credential_issuer_metadata {
     #[derive(DeJson, Debug, Default)]
     #[nserde(default)]
     pub struct KeyAttestationsRequired {
-        pub key_storage: Option<Vec<String>>,
-        pub user_authentication: Option<Vec<String>>,
+        pub key_storage: Vec<String>,
+        pub user_authentication: Vec<String>,
     }
 }

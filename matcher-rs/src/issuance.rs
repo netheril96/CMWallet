@@ -103,7 +103,7 @@ mod test {
 
     struct AddedEntry {
         entry_id: CString,
-        icon: Option<Vec<u8>>,
+        icon: Vec<u8>,
         title: Option<CString>,
         subtitle: Option<CString>,
         disclaimer: Option<CString>,
@@ -145,7 +145,7 @@ mod test {
         ) {
             self.added_entries.push(AddedEntry {
                 entry_id: entry_id.to_owned(),
-                icon: icon.map(|i| i.to_vec()),
+                icon: icon.map(|i| i.to_vec()).unwrap_or_default(),
                 title: title.map(|c| c.to_owned()),
                 subtitle: subtitle.map(|c| c.to_owned()),
                 disclaimer: disclaimer.map(|c| c.to_owned()),
@@ -264,7 +264,7 @@ mod test {
         assert_eq!(entry.entry_id, c"C");
         assert_eq!(entry.title.as_ref().unwrap(), c"TTTT");
         assert_eq!(entry.subtitle.as_ref().unwrap(), c"SSSSS");
-        assert!(entry.icon.is_none());
+        assert!(entry.icon.is_empty());
     }
 
     #[test]

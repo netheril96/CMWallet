@@ -1,65 +1,10 @@
 use base64::{engine::general_purpose::URL_SAFE, Engine as _};
-use nanoserde::{DeJson, SerJson};
+use nanoserde::DeJson;
 use std::collections::HashMap;
 use std::ffi::{CStr, CString};
-use crate::dcql::{DcqlQuery, JsonValue, DcqlMatchResult, Registry, MatchedCredentialSetInfo, DcqlMatchedCredentialEntry};
+use crate::json_value::JsonValue;
+pub use crate::openid4vp_models::*;
 use crate::credman::CredmanApi;
-
-#[derive(DeJson, Debug)]
-pub struct OpenId4VpRequest {
-    pub requests: Option<Vec<ProtocolRequest>>,
-    pub providers: Option<Vec<ProtocolRequest>>,
-}
-
-#[derive(DeJson, Debug)]
-pub struct ProtocolRequest {
-    pub protocol: String,
-    pub data: Option<JsonValue>,
-    pub request: Option<String>, // Legacy
-}
-
-#[derive(DeJson, Debug)]
-pub struct OpenId4VpData {
-    pub dcql_query: Option<DcqlQuery>,
-    pub offer: Option<JsonValue>,
-    pub transaction_data: Option<Vec<String>>,
-}
-
-#[derive(DeJson, Debug)]
-pub struct TransactionData {
-    pub credential_ids: Option<Vec<String>>,
-    #[nserde(rename = "type")]
-    pub transaction_type: Option<String>,
-    pub payload: Option<TransactionPayload>,
-    pub payee_name: Option<String>,
-    pub payment_amount: Option<String>,
-    pub payment_currency: Option<String>,
-    pub merchant_name: Option<String>,
-    pub amount: Option<String>,
-    pub additional_info: Option<String>,
-}
-
-#[derive(DeJson, Debug)]
-pub struct TransactionPayload {
-    pub payee: Option<Payee>,
-    pub amount: Option<f64>,
-    pub amount_display: Option<String>,
-    pub currency: Option<String>,
-}
-
-#[derive(DeJson, Debug)]
-pub struct Payee {
-    pub name: Option<String>,
-}
-
-#[derive(SerJson)]
-pub struct Metadata {
-    pub claims: Vec<Vec<String>>,
-    pub dc_request_index: usize,
-    pub dcql_cred_id: String,
-    pub dcql_credential_set_index: Option<String>,
-    pub dcql_option_index: Option<String>,
-}
 
 pub fn decode_base64url(input: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     let mut normalized = input.replace('+', "-").replace('/', "_");
@@ -68,6 +13,58 @@ pub fn decode_base64url(input: &str) -> Result<Vec<u8>, Box<dyn std::error::Erro
         normalized.push('=');
     }
     Ok(URL_SAFE.decode(normalized)?)
+}
+
+fn parse_protocol_request_data(pr: &ProtocolRequest) -> Result<OpenId4VpData, Box<dyn std::error::Error>> {
+    let mut data_json_str = String::new();
+    
+    if let Some(data) = &pr.data {
+        match data {
+            JsonValue::String(s) => {
+                data_json_str = s.clone();
+            }
+            _ => {}
+        }
+    } else if let Some(req_str) = &pr.request {
+        data_json_str = req_str.clone();
+    }
+
+    if data_json_str.is_empty() {
+        if let Some(data) = &pr.data {
+            data_json_str = serialize_json_value(data);
+        }
+    }
+
+    if pr.protocol == "openid4vp-v1-signed" {
+        log::debug!("Handling signed OpenID4VP request");
+        let parts: Vec<&str> = data_json_str.split('.').collect();
+        if parts.len() >= 2 {
+            let decoded = decode_base64url(parts[1])?;
+            Ok(DeJson::deserialize_json(std::str::from_utf8(&decoded)?)?)
+        } else {
+            if let Some(JsonValue::Object(obj)) = &pr.data {
+                if let Some(JsonValue::String(signed_req)) = obj.get("request") {
+                    let parts: Vec<&str> = signed_req.split('.').collect();
+                    if parts.len() >= 2 {
+                        let decoded = decode_base64url(parts[1])?;
+                        Ok(DeJson::deserialize_json(std::str::from_utf8(&decoded)?)?)
+                    } else {
+                        log::error!("Invalid JWS parts in nested request");
+                        Err("Invalid JWS".into())
+                    }
+                } else {
+                    log::error!("Missing 'request' field in signed data object");
+                    Err("Missing signed request".into())
+                }
+            } else {
+                log::error!("Invalid signed request data format: {}", data_json_str);
+                Err("Invalid signed request data".into())
+            }
+        }
+    } else {
+        log::debug!("Handling unsigned OpenID4VP request");
+        Ok(DeJson::deserialize_json(&data_json_str)?)
+    }
 }
 
 pub fn openid4vp_main(credman: &mut impl CredmanApi) -> Result<(), Box<dyn std::error::Error>> {
@@ -81,6 +78,7 @@ pub fn openid4vp_main(credman: &mut impl CredmanApi) -> Result<(), Box<dyn std::
     let json_start = u32::from_le_bytes(matcher_data_buffer[..4].try_into()?);
     log::debug!("Registry JSON starts at offset: {}", json_start);
     let matcher_data_str = std::str::from_utf8(&matcher_data_buffer[json_start as usize..])?;
+    log::debug!("Registry JSON: {}", matcher_data_str);
     let registry: Registry = match DeJson::deserialize_json(matcher_data_str) {
         Ok(data) => data,
         Err(e) => {
@@ -92,6 +90,7 @@ pub fn openid4vp_main(credman: &mut impl CredmanApi) -> Result<(), Box<dyn std::
 
     let request_buffer = credman.get_request_buffer();
     let request_str = std::str::from_utf8(&request_buffer)?;
+    log::debug!("Request JSON: {}", request_str);
     let request: OpenId4VpRequest = match DeJson::deserialize_json(request_str) {
         Ok(req) => req,
         Err(e) => {
@@ -100,62 +99,17 @@ pub fn openid4vp_main(credman: &mut impl CredmanApi) -> Result<(), Box<dyn std::
         }
     };
 
-    let protocol_requests = request.requests.or(request.providers).unwrap_or_default();
+    let protocol_requests = if !request.requests.is_empty() {
+        request.requests
+    } else {
+        request.providers
+    };
     log::info!("Found {} protocol requests", protocol_requests.len());
     
     for (i, pr) in protocol_requests.iter().enumerate() {
         log::debug!("Processing request {}: protocol={}", i, pr.protocol);
         if pr.protocol == "openid4vp-v1-unsigned" || pr.protocol == "openid4vp-v1-signed" {
-            let mut data_json_str = String::new();
-            
-            if let Some(data) = &pr.data {
-                match data {
-                    JsonValue::String(s) => {
-                        data_json_str = s.clone();
-                    }
-                    _ => {}
-                }
-            } else if let Some(req_str) = &pr.request {
-                data_json_str = req_str.clone();
-            }
-
-            if data_json_str.is_empty() {
-                if let Some(data) = &pr.data {
-                    data_json_str = serialize_json_value(data);
-                }
-            }
-
-            let data_json: OpenId4VpData = if pr.protocol == "openid4vp-v1-signed" {
-                log::debug!("Handling signed OpenID4VP request");
-                let parts: Vec<&str> = data_json_str.split('.').collect();
-                if parts.len() >= 2 {
-                    let decoded = decode_base64url(parts[1])?;
-                    DeJson::deserialize_json(std::str::from_utf8(&decoded)?)?
-                } else {
-                    if let Some(JsonValue::Object(obj)) = &pr.data {
-                        if let Some(JsonValue::String(signed_req)) = obj.get("request") {
-                            let parts: Vec<&str> = signed_req.split('.').collect();
-                            if parts.len() >= 2 {
-                                let decoded = decode_base64url(parts[1])?;
-                                DeJson::deserialize_json(std::str::from_utf8(&decoded)?)?
-                            } else {
-                                log::error!("Invalid JWS parts in nested request");
-                                return Err("Invalid JWS".into());
-                            }
-                        } else {
-                            log::error!("Missing 'request' field in signed data object");
-                            return Err("Missing signed request".into());
-                        }
-                    } else {
-                        log::error!("Invalid signed request data format: {}", data_json_str);
-                        return Err("Invalid signed request data".into());
-                    }
-                }
-            } else {
-                log::debug!("Handling unsigned OpenID4VP request");
-                DeJson::deserialize_json(&data_json_str)?
-            };
-
+            let data_json = parse_protocol_request_data(pr)?;
             let query = data_json.dcql_query.as_ref().ok_or("Missing dcql_query")?;
             let match_result = crate::dcql::dcql_query(query, &registry);
 
@@ -209,6 +163,104 @@ fn report_credential_set_length(
     }
 }
 
+fn report_payment_transaction_entry(
+    credman: &mut impl CredmanApi,
+    c: &MatchedCredential,
+    doc_idx: i32,
+    set_id: &CStr,
+    metadata_cstr: &CStr,
+    merchant: &str,
+    amount: &str,
+    additional: &Option<String>,
+    creds_blob: &[u8],
+) -> Result<(), Box<dyn std::error::Error>> {
+    log::info!("Reporting as payment entry: {}", c.id);
+    let title = CString::new(c.display.verification.title.clone())?;
+    let subtitle = c.display.verification.subtitle.as_ref().map(|s| CString::new(s.clone())).transpose()?;
+    let merchant_cstr = CString::new(merchant.to_string())?;
+    let amount_cstr = CString::new(amount.to_string())?;
+    let additional_cstr = additional.as_ref().map(|s| CString::new(s.clone())).transpose()?;
+    let cred_id_cstr = CString::new(c.id.clone())?;
+
+    let icon_bytes = c.display.verification.icon.as_ref().map(|i| &creds_blob[i.start..i.start + i.length]);
+
+    credman.add_payment_entry_to_set_v2(
+        &cred_id_cstr,
+        Some(&merchant_cstr),
+        Some(&title),
+        subtitle.as_deref(),
+        icon_bytes,
+        Some(&amount_cstr),
+        None,
+        None,
+        additional_cstr.as_deref(),
+        Some(metadata_cstr),
+        set_id,
+        doc_idx,
+    );
+    Ok(())
+}
+
+fn report_standard_verification_entry(
+    credman: &mut impl CredmanApi,
+    wasm_version: u32,
+    c: &MatchedCredential,
+    doc_idx: i32,
+    set_id: &CStr,
+    metadata_cstr: &CStr,
+    creds_blob: &[u8],
+) -> Result<(), Box<dyn std::error::Error>> {
+    log::info!("Reporting as standard entry: {}", c.id);
+    let title = CString::new(c.display.verification.title.clone())?;
+    let subtitle = c.display.verification.subtitle.as_ref().map(|s| CString::new(s.clone())).transpose()?;
+    let explainer = c.display.verification.explainer.as_ref().map(|s| CString::new(s.clone())).transpose()?;
+    let cred_id_cstr = CString::new(c.id.clone())?;
+    let icon_bytes = c.display.verification.icon.as_ref().map(|i| &creds_blob[i.start..i.start + i.length]);
+
+    credman.add_entry_to_set(
+        &cred_id_cstr,
+        icon_bytes,
+        Some(&title),
+        subtitle.as_deref(),
+        explainer.as_deref(),
+        None,
+        Some(metadata_cstr),
+        set_id,
+        doc_idx,
+    );
+
+    log::trace!("Reporting {} claims for entry {}", c.matched_claim_names.len(), c.id);
+    for claim in &c.matched_claim_names {
+        if let JsonValue::Object(obj) = claim {
+            if let Some(JsonValue::Object(v)) = obj.get("verification") {
+                if let Some(JsonValue::String(display_name)) = v.get("display") {
+                    let display_value = match v.get("display_value") {
+                        Some(JsonValue::String(s)) => Some(CString::new(s.clone())?),
+                        _ => None,
+                    };
+                    let name_cstr = CString::new(display_name.clone())?;
+                    credman.add_field_to_entry_set(
+                        &cred_id_cstr,
+                        &name_cstr,
+                        display_value.as_deref(),
+                        set_id,
+                        doc_idx,
+                    );
+                }
+            }
+        }
+    }
+
+    if wasm_version >= 5 {
+        if let Some(meta_text) = &c.display.verification.metadata_display_text {
+            let meta_text_cstr = CString::new(meta_text.clone())?;
+            log::trace!("Adding metadata display text: {}", meta_text);
+            credman.add_metadata_display_text_to_entry_set(&cred_id_cstr, &meta_text_cstr, set_id, doc_idx);
+        }
+    }
+    Ok(())
+}
+
 fn report_matched_credential(
     credman: &mut impl CredmanApi,
     wasm_version: u32,
@@ -220,7 +272,7 @@ fn report_matched_credential(
     dcql_set_idx: Option<&str>,
     dcql_option_idx: Option<&str>,
     creds_blob: &[u8],
-    transaction_info: &Option<(Option<Vec<String>>, String, String, Option<String>)>,
+    transaction_info: &Option<(Vec<String>, String, String, Option<String>)>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     log::debug!("Reporting matched credential: id={}, dcql_id={}, doc_idx={}", matched_doc.id, matched_credential_id, doc_idx);
     for c in &matched_doc.matched {
@@ -231,91 +283,19 @@ fn report_matched_credential(
             dcql_credential_set_index: dcql_set_idx.map(|s| s.to_string()),
             dcql_option_index: dcql_option_idx.map(|s| s.to_string()),
         };
-        let metadata_str = SerJson::serialize_json(&metadata);
+        let metadata_str = nanoserde::SerJson::serialize_json(&metadata);
         let metadata_cstr = CString::new(metadata_str)?;
 
-        let mut is_transaction = false;
-        if let Some((td_cred_ids, merchant, amount, additional)) = transaction_info {
-            if let Some(td_ids) = td_cred_ids {
-                if td_ids.iter().any(|id| id == matched_credential_id) {
-                    log::info!("Reporting as payment entry: {}", c.id);
-                    is_transaction = true;
-                    let title = CString::new(c.display.verification.title.clone())?;
-                    let subtitle = c.display.verification.subtitle.as_ref().map(|s| CString::new(s.clone())).transpose()?;
-                    let merchant_cstr = CString::new(merchant.clone())?;
-                    let amount_cstr = CString::new(amount.clone())?;
-                    let additional_cstr = additional.as_ref().map(|s| CString::new(s.clone())).transpose()?;
-                    let cred_id_cstr = CString::new(c.id.clone())?;
-
-                    let icon_bytes = c.display.verification.icon.as_ref().map(|i| &creds_blob[i.start..i.start + i.length]);
-
-                    credman.add_payment_entry_to_set_v2(
-                        &cred_id_cstr,
-                        Some(&merchant_cstr),
-                        Some(&title),
-                        subtitle.as_deref(),
-                        icon_bytes,
-                        Some(&amount_cstr),
-                        None,
-                        None,
-                        additional_cstr.as_deref(),
-                        Some(&metadata_cstr),
-                        set_id,
-                        doc_idx,
-                    );
-                }
+        let mut reported = false;
+        if let Some((td_ids, merchant, amount, additional)) = transaction_info {
+            if td_ids.iter().any(|id| id == matched_credential_id) {
+                report_payment_transaction_entry(credman, c, doc_idx, set_id, &metadata_cstr, merchant, amount, additional, creds_blob)?;
+                reported = true;
             }
         }
 
-        if !is_transaction {
-            log::info!("Reporting as standard entry: {}", c.id);
-            let title = CString::new(c.display.verification.title.clone())?;
-            let subtitle = c.display.verification.subtitle.as_ref().map(|s| CString::new(s.clone())).transpose()?;
-            let explainer = c.display.verification.explainer.as_ref().map(|s| CString::new(s.clone())).transpose()?;
-            let cred_id_cstr = CString::new(c.id.clone())?;
-            let icon_bytes = c.display.verification.icon.as_ref().map(|i| &creds_blob[i.start..i.start + i.length]);
-
-            credman.add_entry_to_set(
-                &cred_id_cstr,
-                icon_bytes,
-                Some(&title),
-                subtitle.as_deref(),
-                explainer.as_deref(),
-                None,
-                Some(&metadata_cstr),
-                set_id,
-                doc_idx,
-            );
-
-            log::trace!("Reporting {} claims for entry {}", c.matched_claim_names.len(), c.id);
-            for claim in &c.matched_claim_names {
-                if let JsonValue::Object(obj) = claim {
-                    if let Some(JsonValue::Object(v)) = obj.get("verification") {
-                        if let Some(JsonValue::String(display_name)) = v.get("display") {
-                            let display_value = match v.get("display_value") {
-                                Some(JsonValue::String(s)) => Some(CString::new(s.clone())?),
-                                _ => None,
-                            };
-                            let name_cstr = CString::new(display_name.clone())?;
-                            credman.add_field_to_entry_set(
-                                &cred_id_cstr,
-                                &name_cstr,
-                                display_value.as_deref(),
-                                set_id,
-                                doc_idx,
-                            );
-                        }
-                    }
-                }
-            }
-
-            if wasm_version >= 5 {
-                if let Some(meta_text) = &c.display.verification.metadata_display_text {
-                    let meta_text_cstr = CString::new(meta_text.clone())?;
-                    log::trace!("Adding metadata display text: {}", meta_text);
-                    credman.add_metadata_display_text_to_entry_set(&cred_id_cstr, &meta_text_cstr, set_id, doc_idx);
-                }
-            }
+        if !reported {
+            report_standard_verification_entry(credman, wasm_version, c, doc_idx, set_id, &metadata_cstr, creds_blob)?;
         }
     }
     Ok(())
@@ -331,7 +311,7 @@ fn report_matched_credential_set(
     matched_docs: &HashMap<String, DcqlMatchedCredentialEntry>,
     request_id: usize,
     creds_blob: &[u8],
-    transaction_info: &Option<(Option<Vec<String>>, String, String, Option<String>)>,
+    transaction_info: &Option<(Vec<String>, String, String, Option<String>)>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     if curr_set_idx < matched_credential_sets.len() {
         let options = &matched_credential_sets[curr_set_idx];
@@ -372,6 +352,42 @@ fn report_matched_credential_set(
     Ok(())
 }
 
+fn extract_transaction_info(data_json: &OpenId4VpData) -> Result<Option<(Vec<String>, String, String, Option<String>)>, Box<dyn std::error::Error>> {
+    if !data_json.transaction_data.is_empty() {
+        if data_json.transaction_data.len() == 1 {
+            log::debug!("Decoding transaction data");
+            let decoded = decode_base64url(&data_json.transaction_data[0])?;
+            let td: TransactionData = DeJson::deserialize_json(std::str::from_utf8(&decoded)?)?;
+            
+            let mut merchant_name = td.merchant_name.clone().unwrap_or_default();
+            let mut transaction_amount = td.amount.clone().unwrap_or_default();
+            let additional_info = td.additional_info.clone();
+
+            if let Some(t_type) = &td.transaction_type {
+                log::trace!("Transaction type: {}", t_type);
+                if t_type == "urn:eudi:sca:payment:1" {
+                    if let Some(payload) = &td.payload {
+                        merchant_name = payload.payee.as_ref().and_then(|p| p.name.clone()).unwrap_or_default();
+                        transaction_amount = payload.amount_display.clone().unwrap_or_else(|| {
+                            if let Some(curr) = &payload.currency {
+                                format!("{} {:.2}", curr, payload.amount.unwrap_or(0.0))
+                            } else {
+                                format!("{:.2}", payload.amount.unwrap_or(0.0))
+                            }
+                        });
+                    }
+                } else if t_type == "payment_details" {
+                    merchant_name = td.payee_name.clone().unwrap_or_default();
+                    transaction_amount = format!("{} {}", td.payment_currency.as_deref().unwrap_or(""), td.payment_amount.as_deref().unwrap_or(""));
+                }
+            }
+            log::info!("Found transaction data: merchant={}, amount={}", merchant_name, transaction_amount);
+            return Ok(Some((td.credential_ids, merchant_name, transaction_amount, additional_info)));
+        }
+    }
+    Ok(None)
+}
+
 fn report_match_result(
     credman: &mut impl CredmanApi,
     res: &DcqlMatchResult,
@@ -383,41 +399,7 @@ fn report_match_result(
     log::info!("Reporting match results. Wasm version: {}", wasm_version);
     
     if !res.matched_credential_sets.is_empty() {
-        // Find transaction data
-        let mut transaction_info = None;
-        if let Some(td_list) = &data_json.transaction_data {
-            if td_list.len() == 1 {
-                log::debug!("Decoding transaction data");
-                let decoded = decode_base64url(&td_list[0])?;
-                let td: TransactionData = DeJson::deserialize_json(std::str::from_utf8(&decoded)?)?;
-                
-                let mut merchant_name = td.merchant_name.clone().unwrap_or_default();
-                let mut transaction_amount = td.amount.clone().unwrap_or_default();
-                let additional_info = td.additional_info.clone();
-
-                if let Some(t_type) = &td.transaction_type {
-                    log::trace!("Transaction type: {}", t_type);
-                    if t_type == "urn:eudi:sca:payment:1" {
-                        if let Some(payload) = &td.payload {
-                            merchant_name = payload.payee.as_ref().and_then(|p| p.name.clone()).unwrap_or_default();
-                            transaction_amount = payload.amount_display.clone().unwrap_or_else(|| {
-                                if let Some(curr) = &payload.currency {
-                                    format!("{} {:.2}", curr, payload.amount.unwrap_or(0.0))
-                                } else {
-                                    format!("{:.2}", payload.amount.unwrap_or(0.0))
-                                }
-                            });
-                        }
-                    } else if t_type == "payment_details" {
-                        merchant_name = td.payee_name.clone().unwrap_or_default();
-                        transaction_amount = format!("{} {}", td.payment_currency.as_deref().unwrap_or(""), td.payment_amount.as_deref().unwrap_or(""));
-                    }
-                }
-                log::info!("Found transaction data: merchant={}, amount={}", merchant_name, transaction_amount);
-                transaction_info = Some((td.credential_ids, merchant_name, transaction_amount, additional_info));
-            }
-        }
-
+        let transaction_info = extract_transaction_info(data_json)?;
         let first_set = &res.matched_credential_sets[0];
         log::debug!("Reporting {} options from the first matched set", first_set.len());
         for opt in first_set {
