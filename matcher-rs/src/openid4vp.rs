@@ -1,18 +1,13 @@
 use crate::credman::CredmanApi;
 use crate::json_value::{DeterministicMap, JsonValue};
 pub use crate::openid4vp_models::*;
-use base64::{engine::general_purpose::URL_SAFE, Engine as _};
+use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use nanoserde::DeJson;
 use std::borrow::Cow;
 use std::ffi::{CStr, CString};
 
-pub fn decode_base64url(input: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
-    let mut normalized = input.replace('+', "-").replace('/', "_");
-    // Add padding if necessary
-    while normalized.len() % 4 != 0 {
-        normalized.push('=');
-    }
-    Ok(URL_SAFE.decode(normalized)?)
+pub fn decode_base64url(input: &str) -> Result<Vec<u8>, base64::DecodeError> {
+    URL_SAFE_NO_PAD.decode(input.trim_end_matches('='))
 }
 
 fn parse_protocol_request_data<'a>(
@@ -37,9 +32,9 @@ fn parse_protocol_request_data<'a>(
         let parts: Vec<&str> = jws.split('.').collect();
         if parts.len() >= 2 {
             let decoded = decode_base64url(parts[1])?;
-            Ok(Cow::Owned(DeJson::deserialize_json(
-                std::str::from_utf8(&decoded)?,
-            )?))
+            Ok(Cow::Owned(DeJson::deserialize_json(std::str::from_utf8(
+                &decoded,
+            )?)?))
         } else {
             log::error!("Invalid JWS parts");
             Err("Invalid JWS".into())
@@ -879,10 +874,7 @@ mod test {
                     && arr.iter().all(|item| {
                         if let JsonValue::Array(pair) = item {
                             pair.len() == 2
-                                && matches!(
-                                    pair[0],
-                                    JsonValue::Integer(_) | JsonValue::Float(_)
-                                )
+                                && matches!(pair[0], JsonValue::Integer(_) | JsonValue::Float(_))
                                 && matches!(pair[1], JsonValue::Object(_))
                         } else {
                             false
