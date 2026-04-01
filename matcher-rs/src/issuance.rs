@@ -1,5 +1,3 @@
-use std::ffi::CString;
-
 use crate::{
     credman::CredmanApi,
     issuance_matcher::IssuanceMatcherData,
@@ -58,38 +56,30 @@ pub fn issuance_main(credman: &mut impl CredmanApi) -> Result<(), Box<dyn std::e
 
     for (i, r) in request.requests.iter().enumerate() {
         log::trace!("Checking request {}: protocol={}", i, r.protocol);
-        if ALLOWED_PROTOCOLS.iter().any(|s| r.protocol == *s) {
-            let regularized = RegularizedOpenId4VciRequestData::from(&r.data);
-            if matcher_data.filter.matches(&regularized) {
-                log::info!("Match found for request {} with protocol {}", i, r.protocol);
-                let icon = &matcher_data_buffer[matcher_data.icon.0..matcher_data.icon.1];
-                let entry_id = CString::new(matcher_data.entry_id.clone())?;
-                let title = matcher_data
-                    .title
-                    .as_ref()
-                    .map(|s| CString::new(s.clone()))
-                    .transpose()?;
-                let subtitle = matcher_data
-                    .subtitle
-                    .as_ref()
-                    .map(|s| CString::new(s.clone()))
-                    .transpose()?;
-
-                log::debug!("Adding string ID entry: {}", matcher_data.entry_id);
-                credman.add_string_id_entry(
-                    &entry_id,
-                    if icon.is_empty() { None } else { Some(icon) },
-                    title.as_deref(),
-                    subtitle.as_deref(),
-                    None,
-                    None,
-                );
-                // Assuming we only need to add one entry if any request matches
-                break;
-            }
-        } else {
+        if !ALLOWED_PROTOCOLS.iter().any(|s| r.protocol == *s) {
             log::warn!("Unsupported protocol: {}", r.protocol);
+            continue;
         }
+
+        let regularized = RegularizedOpenId4VciRequestData::from(&r.data);
+        if !matcher_data.filter.matches(&regularized) {
+            continue;
+        }
+
+        log::info!("Match found for request {} with protocol {}", i, r.protocol);
+        let icon = &matcher_data_buffer[matcher_data.icon.0..matcher_data.icon.1];
+
+        log::debug!("Adding string ID entry: {}", matcher_data.entry_id);
+        credman.add_string_id_entry(
+            &matcher_data.entry_id,
+            icon,
+            &matcher_data.title,
+            &matcher_data.subtitle,
+            "",
+            "",
+        );
+        // Assuming we only need to add one entry if any request matches
+        break;
     }
 
     log::info!("Issuance matching process completed");
@@ -99,61 +89,26 @@ pub fn issuance_main(credman: &mut impl CredmanApi) -> Result<(), Box<dyn std::e
 #[cfg(test)]
 mod test {
     use super::*;
-    use std::ffi::{CStr, CString};
 
-    struct AddedEntry {
-        entry_id: CString,
-        icon: Option<Vec<u8>>,
-        title: Option<CString>,
-        subtitle: Option<CString>,
-        disclaimer: Option<CString>,
-        warning: Option<CString>,
-    }
+    use crate::test_utils::*;
 
-    struct FakeCredman {
-        request_json: &'static str,
-        registered_json: &'static str,
-        icon: Vec<u8>,
-        added_entries: Vec<AddedEntry>,
-    }
-
-    impl CredmanApi for FakeCredman {
-        fn get_request_buffer(&self) -> Vec<u8> {
-            self.request_json.as_bytes().into()
-        }
-
-        fn get_registered_data(&self) -> Vec<u8> {
-            let mut result = Vec::with_capacity(4 + self.icon.len() + self.registered_json.len());
-            result.extend_from_slice(&u32::to_le_bytes(4 + self.icon.len() as u32));
-            result.extend_from_slice(&self.icon);
-            result.extend_from_slice(self.registered_json.as_bytes());
-            result
-        }
-
-        fn add_string_id_entry(
-            &mut self,
-            entry_id: &CStr,
-            icon: Option<&[u8]>,
-            title: Option<&CStr>,
-            subtitle: Option<&CStr>,
-            disclaimer: Option<&CStr>,
-            warning: Option<&CStr>,
-        ) {
-            self.added_entries.push(AddedEntry {
-                entry_id: entry_id.to_owned(),
-                icon: icon.map(|i| i.to_vec()),
-                title: title.map(|c| c.to_owned()),
-                subtitle: subtitle.map(|c| c.to_owned()),
-                disclaimer: disclaimer.map(|c| c.to_owned()),
-                warning: warning.map(|c| c.to_owned()),
-            });
-        }
+    fn make_fake_credman(request_json: &'static str, registered_json: &'static str, icon: Vec<u8>) -> FakeCredman {
+        let mut credman = FakeCredman::new();
+        credman.request_json = request_json.to_string();
+        
+        let mut result = Vec::with_capacity(4 + icon.len() + registered_json.len());
+        result.extend_from_slice(&u32::to_le_bytes(4 + icon.len() as u32));
+        result.extend_from_slice(&icon);
+        result.extend_from_slice(registered_json.as_bytes());
+        credman.credentials_blob = result;
+        
+        credman
     }
 
     #[test]
     fn match_case1() {
-        let mut credman = FakeCredman {
-            request_json: r#"
+        let mut credman = make_fake_credman(
+            r#"
 {
   "requests": [
     {
@@ -173,7 +128,7 @@ mod test {
     }
   ]
 }"#,
-            registered_json: r#"
+            r#"
       {
         "entry_id": "C",
         "title": "TTTT",
@@ -193,24 +148,23 @@ mod test {
           }
         }
       }"#,
-            icon: Vec::new(),
-            added_entries: Vec::new(),
-        };
+            Vec::new(),
+        );
 
         issuance_main(&mut credman).unwrap();
 
         assert_eq!(credman.added_entries.len(), 1);
         let entry = &credman.added_entries[0];
-        assert_eq!(entry.entry_id, c"C");
-        assert_eq!(entry.title.as_ref().unwrap(), c"TTTT");
-        assert_eq!(entry.subtitle.as_ref().unwrap(), c"SSSSS");
-        assert!(entry.icon.is_none());
+        assert_eq!(entry.entry_id, "C");
+        assert_eq!(entry.title, "TTTT");
+        assert_eq!(entry.subtitle, "SSSSS");
+        assert!(entry.icon.is_empty());
     }
 
     #[test]
     fn invalid_json() {
-        let mut credman = FakeCredman {
-            request_json: r#"
+        let mut credman = make_fake_credman(
+            r#"
 {
   "requests": [
     {
@@ -230,16 +184,15 @@ mod test {
     }
   ]
 "#,
-            registered_json: r#"
+            r#"
       {
         "entry_id": "C",
         "title": "TTTT",
         "subtitle": "SSSSS",
         "icon": [0, 0],
         "filter": {"Unit": {}}"#,
-            icon: Vec::new(),
-            added_entries: Vec::new(),
-        };
+            Vec::new(),
+        );
 
         let errmsg = format!("{:?}", issuance_main(&mut credman).unwrap_err());
         assert!(
@@ -249,8 +202,8 @@ mod test {
 
     #[test]
     fn nomatch_case1() {
-        let mut credman = FakeCredman {
-            request_json: r#"
+        let mut credman = make_fake_credman(
+            r#"
 {
   "requests": [
     {
@@ -270,7 +223,7 @@ mod test {
     }
   ]
 }"#,
-            registered_json: r#"
+            r#"
 {
   "entry_id": "C",
   "title": "TTTT",
@@ -310,9 +263,8 @@ mod test {
     }
   }
 }"#,
-            icon: Vec::new(),
-            added_entries: Vec::new(),
-        };
+            Vec::new(),
+        );
 
         issuance_main(&mut credman).unwrap();
 
@@ -321,8 +273,8 @@ mod test {
 
     #[test]
     fn match_mdoc_doctype() {
-        let mut credman = FakeCredman {
-            request_json: r#"
+        let mut credman = make_fake_credman(
+            r#"
 {
   "requests": [
     {
@@ -348,7 +300,7 @@ mod test {
     }
   ]
 }"#,
-            registered_json: r#"
+            r#"
 {
   "entry_id": "C",
   "title": "TTTT",
@@ -386,9 +338,8 @@ mod test {
     }
   }
 }"#,
-            icon: Vec::new(),
-            added_entries: Vec::new(),
-        };
+            Vec::new(),
+        );
 
         issuance_main(&mut credman).unwrap();
 
