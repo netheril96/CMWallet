@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use crate::json_value::DeterministicSet;
 
 use nanoserde::DeJson;
 
@@ -10,16 +10,16 @@ pub enum OpenId4VciFilter {
     And { filters: Vec<OpenId4VciFilter> },
     Or { filters: Vec<OpenId4VciFilter> },
     Not { filter: Box<OpenId4VciFilter> },
-    AllowsIssuers { issuers: HashSet<String> },
-    AllowsConfigurationIds { configuration_ids: HashSet<String> },
+    AllowsIssuers { issuers: DeterministicSet<String> },
+    AllowsConfigurationIds { configuration_ids: DeterministicSet<String> },
     SupportsAuthCodeFlow {},
     SupportsPreAuthFlow {},
     SupportsNonceEndpoint {},
     SupportsDeferredCredentialEndpoint {},
     SupportsNotificationEndpoint {},
     RequiresBatchIssuance { min_batch_size: u32 },
-    SupportsMdocDoctype { doctypes: HashSet<String> },
-    SupportsSdJwtVct { vcts: HashSet<String> },
+    SupportsMdocDoctype { doctypes: DeterministicSet<String> },
+    SupportsSdJwtVct { vcts: DeterministicSet<String> },
 }
 
 impl Default for OpenId4VciFilter {

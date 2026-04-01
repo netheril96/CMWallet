@@ -1,8 +1,7 @@
-use std::collections::HashMap;
-use crate::json_value::JsonValue;
+use crate::json_value::{JsonValue, DeterministicMap};
 pub use crate::openid4vp_models::*;
 
-pub fn add_all_claims(matched_claim_names: &mut Vec<JsonValue>, candidate_paths: &HashMap<String, JsonValue>) {
+pub fn add_all_claims(matched_claim_names: &mut Vec<JsonValue>, candidate_paths: &DeterministicMap<String, JsonValue>) {
     for value in candidate_paths.values() {
         match value {
             JsonValue::Object(obj) => {
@@ -41,7 +40,7 @@ fn add_all_claims_from_json(matched_claim_names: &mut Vec<JsonValue>, json: &Jso
 fn get_format_candidates<'a>(
     format: &str,
     registry: &'a Registry,
-) -> (Option<&'a HashMap<String, Vec<RegistryCredential>>>, Option<&'a Vec<RegistryIssuanceEntry>>) {
+) -> (Option<&'a DeterministicMap<String, Vec<RegistryCredential>>>, Option<&'a Vec<RegistryIssuanceEntry>>) {
     if format == "mso_mdoc" {
         (
             registry.credentials.mso_mdoc.as_ref(),
@@ -61,7 +60,7 @@ fn get_format_candidates<'a>(
 fn filter_candidates_by_meta<'a>(
     format: &str,
     meta: &Option<DcqlMeta>,
-    candidates: Option<&'a HashMap<String, Vec<RegistryCredential>>>,
+    candidates: Option<&'a DeterministicMap<String, Vec<RegistryCredential>>>,
     inline_issuance_candidates: Option<&'a Vec<RegistryIssuanceEntry>>,
 ) -> (Vec<&'a RegistryCredential>, Option<RegistryIssuanceEntry>) {
     let mut inline_issuance = None;
@@ -130,7 +129,7 @@ fn match_candidate_claims(
     if !claims_req.is_empty() {
         if !claim_sets_req.is_empty() {
             log::trace!("Candidate {}: matching against claim_sets", candidate.id);
-            let mut matched_claim_ids = HashMap::new();
+            let mut matched_claim_ids = DeterministicMap::new();
             for claim in claims_req {
                 if let Some(claim_id) = &claim.id {
                     if let Some(matched_info) = match_claim(claim, &candidate.paths) {
@@ -223,7 +222,7 @@ pub fn match_credential(credential: &DcqlCredential, registry: &Registry) -> Mat
     }
 }
 
-fn match_claim(claim: &DcqlClaim, candidate_paths: &HashMap<String, JsonValue>) -> Option<MatchedClaim> {
+fn match_claim(claim: &DcqlClaim, candidate_paths: &DeterministicMap<String, JsonValue>) -> Option<MatchedClaim> {
     log::trace!("Matching claim path: {:?}", claim.path);
     let mut curr_val = None;
     for (i, p) in claim.path.iter().enumerate() {
@@ -279,7 +278,7 @@ fn match_claim(claim: &DcqlClaim, candidate_paths: &HashMap<String, JsonValue>) 
 
 fn evaluate_explicit_credential_sets(
     credential_sets: &[DcqlCredentialSet],
-    candidate_matched_credentials: &HashMap<String, DcqlMatchedCredentialEntry>,
+    candidate_matched_credentials: &DeterministicMap<String, DcqlMatchedCredentialEntry>,
 ) -> (bool, Vec<Vec<MatchedCredentialSetInfo>>) {
     let mut matched_credential_sets = Vec::new();
     let mut overall_matched = true;
@@ -326,7 +325,7 @@ fn evaluate_explicit_credential_sets(
 
 fn evaluate_implicit_credential_sets(
     credentials_req: &[DcqlCredential],
-    candidate_matched_credentials: &HashMap<String, DcqlMatchedCredentialEntry>,
+    candidate_matched_credentials: &DeterministicMap<String, DcqlMatchedCredentialEntry>,
 ) -> Vec<Vec<MatchedCredentialSetInfo>> {
     let mut matched_credential_sets = Vec::new();
     if credentials_req.len() == candidate_matched_credentials.len() {
@@ -351,8 +350,8 @@ fn evaluate_implicit_credential_sets(
 
 pub fn dcql_query(query: &DcqlQuery, registry: &Registry) -> DcqlMatchResult {
     log::info!("Starting DCQL query with {} credential requirements", query.credentials.len());
-    let mut candidate_matched_credentials = HashMap::new();
-    let mut candidate_inline_issuance_credentials = HashMap::new();
+    let mut candidate_matched_credentials = DeterministicMap::new();
+    let mut candidate_inline_issuance_credentials = DeterministicMap::new();
 
     for cred_req in &query.credentials {
         let res = match_credential(cred_req, registry);
@@ -400,7 +399,7 @@ pub fn dcql_query(query: &DcqlQuery, registry: &Registry) -> DcqlMatchResult {
         log::info!("Overall DCQL query failed");
         DcqlMatchResult {
             matched_credential_sets: Vec::new(),
-            matched_credentials: HashMap::new(),
+            matched_credentials: DeterministicMap::new(),
             inline_issuance: None,
         }
     }

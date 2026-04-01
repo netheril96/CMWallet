@@ -1,8 +1,7 @@
 use base64::{engine::general_purpose::URL_SAFE, Engine as _};
 use nanoserde::DeJson;
-use std::collections::HashMap;
 use std::ffi::{CStr, CString};
-use crate::json_value::JsonValue;
+use crate::json_value::{JsonValue, DeterministicMap};
 pub use crate::openid4vp_models::*;
 use crate::credman::CredmanApi;
 
@@ -308,7 +307,7 @@ fn report_matched_credential_set(
     matched_credential_sets: &[Vec<MatchedCredentialSetInfo>],
     curr_doc_idx: &mut i32,
     wasm_version: u32,
-    matched_docs: &HashMap<String, DcqlMatchedCredentialEntry>,
+    matched_docs: &DeterministicMap<String, DcqlMatchedCredentialEntry>,
     request_id: usize,
     creds_blob: &[u8],
     transaction_info: &Option<(Vec<String>, String, String, Option<String>)>,
@@ -470,10 +469,10 @@ mod test {
     use super::*;
     use std::ffi::CStr;
     use nanoserde::{SerJson, DeJson};
-    use std::collections::HashMap;
 
-    #[derive(SerJson, DeJson, PartialEq, Debug, Clone)]
+    #[derive(SerJson, DeJson, PartialEq, Debug, Clone, Default)]
     enum EntryType {
+        #[default]
         Verification,
         InlineIssuance,
         Payment,
@@ -481,7 +480,7 @@ mod test {
         Export,
     }
 
-    #[derive(SerJson, DeJson, PartialEq, Debug, Clone)]
+    #[derive(SerJson, DeJson, PartialEq, Debug, Clone, Default)]
     struct FakeEntry {
         #[nserde(rename = "credId")]
         cred_id: String,
@@ -514,11 +513,11 @@ mod test {
         #[nserde(rename = "setLength")]
         set_length: i32,
         #[nserde(default)]
-        entries: HashMap<String, HashMap<String, FakeEntry>>,
+        entries: DeterministicMap<String, DeterministicMap<String, FakeEntry>>,
     }
 
     struct FakeCredman {
-        entry_sets: HashMap<String, FakeEntrySet>,
+        entry_sets: DeterministicMap<String, FakeEntrySet>,
         standalone_entries: Vec<FakeEntry>,
         wasm_version: u32,
         request_json: String,
@@ -528,7 +527,7 @@ mod test {
     impl FakeCredman {
         fn new() -> Self {
             Self {
-                entry_sets: HashMap::new(),
+                entry_sets: DeterministicMap::new(),
                 standalone_entries: Vec::new(),
                 wasm_version: 9999,
                 request_json: String::new(),
@@ -553,7 +552,7 @@ mod test {
             self.entry_sets.insert(s_id.clone(), FakeEntrySet {
                 set_id: s_id,
                 set_length,
-                entries: HashMap::new(),
+                entries: DeterministicMap::new(),
             });
         }
         fn add_entry_to_set(&mut self, cred_id: &CStr, _icon: Option<&[u8]>, title: Option<&CStr>, subtitle: Option<&CStr>, disclaimer: Option<&CStr>, warning: Option<&CStr>, _metadata: Option<&CStr>, set_id: &CStr, set_index: i32) {
@@ -572,7 +571,7 @@ mod test {
                 transaction_amount: String::new(),
                 additional_info: String::new(),
             };
-            self.entry_sets.get_mut(&s_id).unwrap().entries.entry(set_index.to_string()).or_default().insert(c_id, entry);
+            self.entry_sets.get_mut(&s_id).unwrap().entries.entry(set_index.to_string()).or_insert_with(DeterministicMap::new).insert(c_id, entry);
         }
         fn add_field_to_entry_set(&mut self, cred_id: &CStr, field_display_name: &CStr, field_display_value: Option<&CStr>, set_id: &CStr, set_index: i32) {
             let s_id = set_id.to_str().unwrap().to_string();
@@ -597,7 +596,7 @@ mod test {
                 transaction_amount: transaction_amount.map(|s| s.to_str().unwrap().to_string()).unwrap_or_default(),
                 additional_info: additional_info.map(|s| s.to_str().unwrap().to_string()).unwrap_or_default(),
             };
-            self.entry_sets.get_mut(&s_id).unwrap().entries.entry(set_index.to_string()).or_default().insert(c_id, entry);
+            self.entry_sets.get_mut(&s_id).unwrap().entries.entry(set_index.to_string()).or_insert_with(DeterministicMap::new).insert(c_id, entry);
         }
         fn add_inline_issuance_entry(&mut self, cred_id: &CStr, _icon: Option<&[u8]>, title: Option<&CStr>, subtitle: Option<&CStr>) {
             let entry = FakeEntry {
@@ -625,7 +624,7 @@ mod test {
     #[derive(SerJson, DeJson, PartialEq, Debug)]
     struct FakeCredmanResult {
         #[nserde(rename = "entrySets")]
-        entry_sets: HashMap<String, FakeEntrySet>,
+        entry_sets: DeterministicMap<String, FakeEntrySet>,
         #[nserde(rename = "standaloneEntries")]
         standalone_entries: Vec<FakeEntry>,
     }
@@ -654,7 +653,7 @@ mod test {
                 });
                 
                 if is_map {
-                    let mut obj = HashMap::new();
+                    let mut obj = DeterministicMap::new();
                     for item in arr {
                         if let JsonValue::Array(mut pair) = item {
                             let val = pair.pop().unwrap();
@@ -680,8 +679,8 @@ mod test {
                 // Some empty arrays in nlohmann::json might be empty objects if it couldn't infer the type
                 // But wait, if expected has empty object for fields, and we have empty array, let's normalize both to empty array
                 // For simplicity, let's just normalize the contents.
-                let mut new_obj = HashMap::new();
-                for (k, v) in obj {
+                let mut new_obj = DeterministicMap::new();
+                for (k, v) in obj.0.clone() {
                     if k == "fields" {
                         if let JsonValue::Object(inner) = &v {
                             if inner.is_empty() {

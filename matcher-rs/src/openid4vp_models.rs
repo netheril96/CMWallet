@@ -1,6 +1,5 @@
 use nanoserde::{DeJson, SerJson};
-use std::collections::HashMap;
-use crate::json_value::JsonValue;
+use crate::json_value::{JsonValue, DeterministicMap};
 
 #[derive(DeJson, Debug, Clone, Default)]
 #[nserde(default)]
@@ -51,9 +50,9 @@ pub struct Registry {
 #[nserde(default)]
 pub struct RegistryCredentials {
     #[nserde(rename = "mso_mdoc")]
-    pub mso_mdoc: Option<HashMap<String, Vec<RegistryCredential>>>,
+    pub mso_mdoc: Option<DeterministicMap<String, Vec<RegistryCredential>>>,
     #[nserde(rename = "dc+sd-jwt")]
-    pub sd_jwt: Option<HashMap<String, Vec<RegistryCredential>>>,
+    pub sd_jwt: Option<DeterministicMap<String, Vec<RegistryCredential>>>,
     pub issuance: Option<RegistryIssuance>,
 }
 
@@ -62,7 +61,7 @@ pub struct RegistryCredentials {
 pub struct RegistryCredential {
     pub id: String,
     pub display: RegistryDisplay,
-    pub paths: HashMap<String, JsonValue>, // Recursive structure
+    pub paths: DeterministicMap<String, JsonValue>, // Recursive structure
 }
 
 #[derive(DeJson, Debug, Clone, Default)]
@@ -135,7 +134,7 @@ pub struct MatchCredentialResult {
 #[nserde(default)]
 pub struct DcqlMatchResult {
     pub matched_credential_sets: Vec<Vec<MatchedCredentialSetInfo>>,
-    pub matched_credentials: HashMap<String, DcqlMatchedCredentialEntry>,
+    pub matched_credentials: DeterministicMap<String, DcqlMatchedCredentialEntry>,
     pub inline_issuance: Option<RegistryIssuanceEntry>,
 }
 
