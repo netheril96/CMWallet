@@ -1,8 +1,9 @@
 use crate::credman::CredmanApi;
 use crate::json_value::{DeterministicMap, JsonValue};
 pub use crate::openid4vp_models::*;
-use base64::{Engine as _, engine::general_purpose::URL_SAFE};
+use base64::{engine::general_purpose::URL_SAFE, Engine as _};
 use nanoserde::DeJson;
+use std::borrow::Cow;
 use std::ffi::{CStr, CString};
 
 pub fn decode_base64url(input: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
@@ -14,57 +15,47 @@ pub fn decode_base64url(input: &str) -> Result<Vec<u8>, Box<dyn std::error::Erro
     Ok(URL_SAFE.decode(normalized)?)
 }
 
-fn parse_protocol_request_data(
-    pr: &ProtocolRequest,
-) -> Result<OpenId4VpData, Box<dyn std::error::Error>> {
-    let mut data_json_str = String::new();
-
-    if let Some(data) = &pr.data {
-        match data {
-            JsonValue::String(s) => {
-                data_json_str = s.clone();
-            }
-            _ => {}
-        }
-    } else if let Some(req_str) = &pr.request {
-        data_json_str = req_str.clone();
-    }
-
-    if data_json_str.is_empty() {
-        if let Some(data) = &pr.data {
-            data_json_str = serialize_json_value(data);
-        }
-    }
-
+fn parse_protocol_request_data<'a>(
+    pr: &'a ProtocolRequest,
+) -> Result<Cow<'a, OpenId4VpData>, Box<dyn std::error::Error>> {
     if pr.protocol == "openid4vp-v1-signed" {
         log::debug!("Handling signed OpenID4VP request");
-        let parts: Vec<&str> = data_json_str.split('.').collect();
+        let jws: &'a str = if let Some(data) = &pr.data {
+            match data {
+                ProtocolRequestData::String(s) => s,
+                ProtocolRequestData::Object(obj) => obj
+                    .request
+                    .as_deref()
+                    .ok_or("Missing 'request' field in signed data object")?,
+            }
+        } else if let Some(req_str) = &pr.request {
+            req_str
+        } else {
+            return Err("Missing signed request data".into());
+        };
+
+        let parts: Vec<&str> = jws.split('.').collect();
         if parts.len() >= 2 {
             let decoded = decode_base64url(parts[1])?;
-            Ok(DeJson::deserialize_json(std::str::from_utf8(&decoded)?)?)
+            Ok(Cow::Owned(DeJson::deserialize_json(
+                std::str::from_utf8(&decoded)?,
+            )?))
         } else {
-            if let Some(JsonValue::Object(obj)) = &pr.data {
-                if let Some(JsonValue::String(signed_req)) = obj.get("request") {
-                    let parts: Vec<&str> = signed_req.split('.').collect();
-                    if parts.len() >= 2 {
-                        let decoded = decode_base64url(parts[1])?;
-                        Ok(DeJson::deserialize_json(std::str::from_utf8(&decoded)?)?)
-                    } else {
-                        log::error!("Invalid JWS parts in nested request");
-                        Err("Invalid JWS".into())
-                    }
-                } else {
-                    log::error!("Missing 'request' field in signed data object");
-                    Err("Missing signed request".into())
-                }
-            } else {
-                log::error!("Invalid signed request data format: {}", data_json_str);
-                Err("Invalid signed request data".into())
-            }
+            log::error!("Invalid JWS parts");
+            Err("Invalid JWS".into())
         }
     } else {
         log::debug!("Handling unsigned OpenID4VP request");
-        Ok(DeJson::deserialize_json(&data_json_str)?)
+        if let Some(data) = &pr.data {
+            match data {
+                ProtocolRequestData::Object(obj) => Ok(Cow::Borrowed(obj)),
+                ProtocolRequestData::String(s) => Ok(Cow::Owned(DeJson::deserialize_json(s)?)),
+            }
+        } else if let Some(req_str) = &pr.request {
+            Ok(Cow::Owned(DeJson::deserialize_json(req_str)?))
+        } else {
+            Err("Missing unsigned request data".into())
+        }
     }
 }
 

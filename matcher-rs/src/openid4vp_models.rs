@@ -162,18 +162,45 @@ pub struct OpenId4VpRequest {
 
 #[derive(DeJson, Debug, Clone, Default)]
 #[nserde(default)]
-pub struct ProtocolRequest {
-    pub protocol: String,
-    pub data: Option<JsonValue>,
-    pub request: Option<String>, // Legacy
-}
-
-#[derive(DeJson, Debug, Clone, Default)]
-#[nserde(default)]
 pub struct OpenId4VpData {
     pub dcql_query: Option<DcqlQuery>,
     pub offer: Option<JsonValue>,
     pub transaction_data: Vec<String>,
+    pub request: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub enum ProtocolRequestData {
+    String(String),
+    Object(OpenId4VpData),
+}
+
+impl DeJson for ProtocolRequestData {
+    fn de_json(
+        state: &mut nanoserde::DeJsonState,
+        input: &mut std::str::Chars,
+    ) -> Result<Self, nanoserde::DeJsonErr> {
+        match state.tok {
+            nanoserde::DeJsonTok::Str => {
+                let s = state.strbuf.clone();
+                state.next_tok(input)?;
+                Ok(ProtocolRequestData::String(s))
+            }
+            nanoserde::DeJsonTok::CurlyOpen => {
+                let data = DeJson::de_json(state, input)?;
+                Ok(ProtocolRequestData::Object(data))
+            }
+            _ => Err(state.err_exp("String or Object")),
+        }
+    }
+}
+
+#[derive(DeJson, Debug, Clone, Default)]
+#[nserde(default)]
+pub struct ProtocolRequest {
+    pub protocol: String,
+    pub data: Option<ProtocolRequestData>,
+    pub request: Option<String>, // Legacy
 }
 
 #[derive(DeJson, Debug, Clone, Default)]
