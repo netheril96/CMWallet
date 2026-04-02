@@ -1,3 +1,4 @@
+pub mod base64url;
 pub mod bindings;
 pub mod credman;
 pub mod dcql;

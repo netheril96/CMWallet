@@ -1,13 +1,9 @@
 use crate::credman::CredmanApi;
 use crate::json_value::{DeterministicMap, JsonValue};
 pub use crate::openid4vp_models::*;
-use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
+use crate::base64url::decode_base64url;
 use nanoserde::DeJson;
 use std::borrow::Cow;
-
-pub fn decode_base64url(input: &str) -> Result<Vec<u8>, base64::DecodeError> {
-    URL_SAFE_NO_PAD.decode(input.trim_end_matches('='))
-}
 
 fn parse_protocol_request_data<'a>(
     pr: &'a ProtocolRequest,
