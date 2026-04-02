@@ -8,6 +8,26 @@ pub type FastIndexSet<T> = IndexSet<T, FxBuildHasher>;
 #[derive(Debug, Clone, Default)]
 pub struct DeterministicMap<K, V>(pub FastIndexMap<K, V>);
 
+impl<K, V> DeterministicMap<K, V> {
+    pub fn new() -> Self {
+        Self(FastIndexMap::default())
+    }
+}
+
+impl<K: std::hash::Hash + Eq, V> std::iter::FromIterator<(K, V)> for DeterministicMap<K, V> {
+    fn from_iter<I: IntoIterator<Item = (K, V)>>(iter: I) -> Self {
+        let mut map = FastIndexMap::default();
+        map.extend(iter);
+        DeterministicMap(map)
+    }
+}
+
+impl<K: std::hash::Hash + Eq, V> Extend<(K, V)> for DeterministicMap<K, V> {
+    fn extend<I: IntoIterator<Item = (K, V)>>(&mut self, iter: I) {
+        self.0.extend(iter);
+    }
+}
+
 impl<K: std::hash::Hash + Eq, V: PartialEq> PartialEq for DeterministicMap<K, V> {
     fn eq(&self, other: &Self) -> bool {
         self.0 == other.0
@@ -24,12 +44,6 @@ impl<K, V> std::ops::Deref for DeterministicMap<K, V> {
 impl<K, V> std::ops::DerefMut for DeterministicMap<K, V> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
-    }
-}
-
-impl<K, V> DeterministicMap<K, V> {
-    pub fn new() -> Self {
-        Self(FastIndexMap::default())
     }
 }
 
@@ -78,6 +92,20 @@ impl<V: SerJson> SerJson for DeterministicMap<String, V> {
 
 #[derive(Debug, Clone, Default)]
 pub struct DeterministicSet<T>(pub FastIndexSet<T>);
+
+impl<T: std::hash::Hash + Eq> std::iter::FromIterator<T> for DeterministicSet<T> {
+    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
+        let mut set = FastIndexSet::default();
+        set.extend(iter);
+        DeterministicSet(set)
+    }
+}
+
+impl<T: std::hash::Hash + Eq> Extend<T> for DeterministicSet<T> {
+    fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
+        self.0.extend(iter);
+    }
+}
 
 impl<T: std::hash::Hash + Eq> PartialEq for DeterministicSet<T> {
     fn eq(&self, other: &Self) -> bool {
