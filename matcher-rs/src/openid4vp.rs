@@ -1,7 +1,7 @@
+use crate::base64url::decode_base64url;
 use crate::credman::CredmanApi;
 use crate::json_value::{DeterministicMap, JsonValue};
 pub use crate::openid4vp_models::*;
-use crate::base64url::decode_base64url;
 use nanoserde::DeJson;
 use std::borrow::Cow;
 
@@ -235,13 +235,7 @@ fn report_standard_verification_entry(
             _ => "",
         };
 
-        credman.add_field_to_entry_set(
-            &c.id,
-            display_name,
-            display_value,
-            set_id,
-            doc_idx,
-        );
+        credman.add_field_to_entry_set(&c.id, display_name, display_value, set_id, doc_idx);
     }
 
     if wasm_version >= 5 && !c.display.verification.metadata_display_text.is_empty() {
@@ -279,12 +273,12 @@ fn report_matched_credential(
         doc_idx
     );
     for c in &matched_doc.matched {
-        let metadata = Metadata {
-            claims: c.matched_claim_metadata.iter().map(|v| v.to_vec()).collect(),
+        let metadata = SelectionMetadata {
+            claims: &c.matched_claim_metadata,
             dc_request_index: request_id,
-            dcql_cred_id: matched_credential_id.to_string(),
-            dcql_credential_set_index: dcql_set_idx.unwrap_or("").to_string(),
-            dcql_option_index: dcql_option_idx.unwrap_or("").to_string(),
+            dcql_cred_id: matched_credential_id,
+            dcql_credential_set_index: dcql_set_idx.unwrap_or(""),
+            dcql_option_index: dcql_option_idx.unwrap_or(""),
         };
         let metadata_str = nanoserde::SerJson::serialize_json(&metadata);
 
@@ -429,7 +423,7 @@ fn extract_transaction_info(
                 merchant_name,
                 transaction_amount,
                 td.additional_info.clone(),
-                )));
+            )));
         }
     }
 
@@ -538,12 +532,7 @@ fn report_match_result(
             .as_ref()
             .map_or(&[][..], |i| &creds_blob[i.start..i.start + i.length]);
 
-        credman.add_inline_issuance_entry(
-            &inline.id,
-            icon_bytes,
-            &inline.title,
-            &inline.subtitle,
-        );
+        credman.add_inline_issuance_entry(&inline.id, icon_bytes, &inline.title, &inline.subtitle);
     }
 
     Ok(())
@@ -839,11 +828,7 @@ mod test {
 
         let expected_result: FakeCredmanResult = DeJson::deserialize_json(&expected_json).unwrap();
 
-        assert_eq!(
-            result, expected_result,
-            "Test {} failed",
-            test_name
-        );
+        assert_eq!(result, expected_result, "Test {} failed", test_name);
     }
 
     macro_rules! define_test {

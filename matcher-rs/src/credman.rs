@@ -115,12 +115,32 @@ impl CredmanApi for CredmanApiImpl {
         warning: &str,
     ) {
         let entry_id_c = CString::new(entry_id).unwrap();
-        let title_c = if title.is_empty() { None } else { Some(CString::new(title).unwrap()) };
-        let subtitle_c = if subtitle.is_empty() { None } else { Some(CString::new(subtitle).unwrap()) };
-        let disclaimer_c = if disclaimer.is_empty() { None } else { Some(CString::new(disclaimer).unwrap()) };
-        let warning_c = if warning.is_empty() { None } else { Some(CString::new(warning).unwrap()) };
+        let title_c = if title.is_empty() {
+            None
+        } else {
+            Some(CString::new(title).unwrap())
+        };
+        let subtitle_c = if subtitle.is_empty() {
+            None
+        } else {
+            Some(CString::new(subtitle).unwrap())
+        };
+        let disclaimer_c = if disclaimer.is_empty() {
+            None
+        } else {
+            Some(CString::new(disclaimer).unwrap())
+        };
+        let warning_c = if warning.is_empty() {
+            None
+        } else {
+            Some(CString::new(warning).unwrap())
+        };
 
-        let icon_bytes = if icon.is_empty() { std::ptr::null() } else { icon.as_ptr() } as *const std::os::raw::c_char;
+        let icon_bytes = if icon.is_empty() {
+            std::ptr::null()
+        } else {
+            icon.as_ptr()
+        } as *const std::os::raw::c_char;
         let icon_length = icon.len();
 
         unsafe {
@@ -130,7 +150,9 @@ impl CredmanApi for CredmanApiImpl {
                 icon_length,
                 title_c.as_ref().map_or(std::ptr::null(), |c| c.as_ptr()),
                 subtitle_c.as_ref().map_or(std::ptr::null(), |c| c.as_ptr()),
-                disclaimer_c.as_ref().map_or(std::ptr::null(), |c| c.as_ptr()),
+                disclaimer_c
+                    .as_ref()
+                    .map_or(std::ptr::null(), |c| c.as_ptr()),
                 warning_c.as_ref().map_or(std::ptr::null(), |c| c.as_ptr()),
             );
         }
@@ -154,14 +176,38 @@ impl CredmanApi for CredmanApiImpl {
         set_index: i32,
     ) {
         let cred_id_c = CString::new(cred_id).unwrap();
-        let title_c = if title.is_empty() { None } else { Some(CString::new(title).unwrap()) };
-        let subtitle_c = if subtitle.is_empty() { None } else { Some(CString::new(subtitle).unwrap()) };
-        let disclaimer_c = if disclaimer.is_empty() { None } else { Some(CString::new(disclaimer).unwrap()) };
-        let warning_c = if warning.is_empty() { None } else { Some(CString::new(warning).unwrap()) };
-        let metadata_c = if metadata.is_empty() { None } else { Some(CString::new(metadata).unwrap()) };
+        let title_c = if title.is_empty() {
+            None
+        } else {
+            Some(CString::new(title).unwrap())
+        };
+        let subtitle_c = if subtitle.is_empty() {
+            None
+        } else {
+            Some(CString::new(subtitle).unwrap())
+        };
+        let disclaimer_c = if disclaimer.is_empty() {
+            None
+        } else {
+            Some(CString::new(disclaimer).unwrap())
+        };
+        let warning_c = if warning.is_empty() {
+            None
+        } else {
+            Some(CString::new(warning).unwrap())
+        };
+        let metadata_c = if metadata.is_empty() {
+            None
+        } else {
+            Some(CString::new(metadata).unwrap())
+        };
         let set_id_c = CString::new(set_id).unwrap();
 
-        let icon_bytes = if icon.is_empty() { std::ptr::null() } else { icon.as_ptr() } as *const std::os::raw::c_char;
+        let icon_bytes = if icon.is_empty() {
+            std::ptr::null()
+        } else {
+            icon.as_ptr()
+        } as *const std::os::raw::c_char;
         let icon_length = icon.len();
 
         unsafe {
@@ -171,7 +217,9 @@ impl CredmanApi for CredmanApiImpl {
                 icon_length,
                 title_c.as_ref().map_or(std::ptr::null(), |c| c.as_ptr()),
                 subtitle_c.as_ref().map_or(std::ptr::null(), |c| c.as_ptr()),
-                disclaimer_c.as_ref().map_or(std::ptr::null(), |c| c.as_ptr()),
+                disclaimer_c
+                    .as_ref()
+                    .map_or(std::ptr::null(), |c| c.as_ptr()),
                 warning_c.as_ref().map_or(std::ptr::null(), |c| c.as_ptr()),
                 metadata_c.as_ref().map_or(std::ptr::null(), |c| c.as_ptr()),
                 set_id_c.as_ptr(),
@@ -189,14 +237,20 @@ impl CredmanApi for CredmanApiImpl {
     ) {
         let cred_id_c = CString::new(cred_id).unwrap();
         let field_display_name_c = CString::new(field_display_name).unwrap();
-        let field_display_value_c = if field_display_value.is_empty() { None } else { Some(CString::new(field_display_value).unwrap()) };
+        let field_display_value_c = if field_display_value.is_empty() {
+            None
+        } else {
+            Some(CString::new(field_display_value).unwrap())
+        };
         let set_id_c = CString::new(set_id).unwrap();
 
         unsafe {
             AddFieldToEntrySet(
                 cred_id_c.as_ptr(),
                 field_display_name_c.as_ptr(),
-                field_display_value_c.as_ref().map_or(std::ptr::null(), |c| c.as_ptr()),
+                field_display_value_c
+                    .as_ref()
+                    .map_or(std::ptr::null(), |c| c.as_ptr()),
                 set_id_c.as_ptr(),
                 set_index,
             );
@@ -218,35 +272,81 @@ impl CredmanApi for CredmanApiImpl {
         set_index: i32,
     ) {
         let cred_id_c = CString::new(cred_id).unwrap();
-        let merchant_name_c = if merchant_name.is_empty() { None } else { Some(CString::new(merchant_name).unwrap()) };
-        let payment_method_name_c = if payment_method_name.is_empty() { None } else { Some(CString::new(payment_method_name).unwrap()) };
-        let payment_method_subtitle_c = if payment_method_subtitle.is_empty() { None } else { Some(CString::new(payment_method_subtitle).unwrap()) };
-        let transaction_amount_c = if transaction_amount.is_empty() { None } else { Some(CString::new(transaction_amount).unwrap()) };
-        let additional_info_c = if additional_info.is_empty() { None } else { Some(CString::new(additional_info).unwrap()) };
-        let metadata_c = if metadata.is_empty() { None } else { Some(CString::new(metadata).unwrap()) };
+        let merchant_name_c = if merchant_name.is_empty() {
+            None
+        } else {
+            Some(CString::new(merchant_name).unwrap())
+        };
+        let payment_method_name_c = if payment_method_name.is_empty() {
+            None
+        } else {
+            Some(CString::new(payment_method_name).unwrap())
+        };
+        let payment_method_subtitle_c = if payment_method_subtitle.is_empty() {
+            None
+        } else {
+            Some(CString::new(payment_method_subtitle).unwrap())
+        };
+        let transaction_amount_c = if transaction_amount.is_empty() {
+            None
+        } else {
+            Some(CString::new(transaction_amount).unwrap())
+        };
+        let additional_info_c = if additional_info.is_empty() {
+            None
+        } else {
+            Some(CString::new(additional_info).unwrap())
+        };
+        let metadata_c = if metadata.is_empty() {
+            None
+        } else {
+            Some(CString::new(metadata).unwrap())
+        };
         let set_id_c = CString::new(set_id).unwrap();
 
-        let icon_bytes = if payment_method_icon.is_empty() { std::ptr::null() } else { payment_method_icon.as_ptr() } as *const std::os::raw::c_char;
+        let icon_bytes = if payment_method_icon.is_empty() {
+            std::ptr::null()
+        } else {
+            payment_method_icon.as_ptr()
+        } as *const std::os::raw::c_char;
         let icon_length = payment_method_icon.len();
-        let bank_icon_bytes = if bank_icon.is_empty() { std::ptr::null() } else { bank_icon.as_ptr() } as *const std::os::raw::c_char;
+        let bank_icon_bytes = if bank_icon.is_empty() {
+            std::ptr::null()
+        } else {
+            bank_icon.as_ptr()
+        } as *const std::os::raw::c_char;
         let bank_icon_length = bank_icon.len();
-        let provider_icon_bytes = if payment_provider_icon.is_empty() { std::ptr::null() } else { payment_provider_icon.as_ptr() } as *const std::os::raw::c_char;
+        let provider_icon_bytes = if payment_provider_icon.is_empty() {
+            std::ptr::null()
+        } else {
+            payment_provider_icon.as_ptr()
+        } as *const std::os::raw::c_char;
         let provider_icon_length = payment_provider_icon.len();
 
         unsafe {
             AddPaymentEntryToSetV2(
                 cred_id_c.as_ptr(),
-                merchant_name_c.as_ref().map_or(std::ptr::null(), |c| c.as_ptr()),
-                payment_method_name_c.as_ref().map_or(std::ptr::null(), |c| c.as_ptr()),
-                payment_method_subtitle_c.as_ref().map_or(std::ptr::null(), |c| c.as_ptr()),
+                merchant_name_c
+                    .as_ref()
+                    .map_or(std::ptr::null(), |c| c.as_ptr()),
+                payment_method_name_c
+                    .as_ref()
+                    .map_or(std::ptr::null(), |c| c.as_ptr()),
+                payment_method_subtitle_c
+                    .as_ref()
+                    .map_or(std::ptr::null(), |c| c.as_ptr()),
                 icon_bytes,
                 icon_length,
-                transaction_amount_c.as_ref().map_or(std::ptr::null(), |c| c.as_ptr()),
+                transaction_amount_c
+                    .as_ref()
+                    .map_or(std::ptr::null(), |c| c.as_ptr()),
                 bank_icon_bytes,
                 bank_icon_length,
                 provider_icon_bytes,
                 provider_icon_length,
-                additional_info_c.as_ref().map_or(std::ptr::null(), |c| c.as_ptr()),
+                additional_info_c
+                    .as_ref()
+                    .map_or(std::ptr::null(), |c| c.as_ptr()),
                 metadata_c.as_ref().map_or(std::ptr::null(), |c| c.as_ptr()),
                 set_id_c.as_ptr(),
                 set_index,
@@ -261,10 +361,22 @@ impl CredmanApi for CredmanApiImpl {
         subtitle: &str,
     ) {
         let cred_id_c = CString::new(cred_id).unwrap();
-        let title_c = if title.is_empty() { None } else { Some(CString::new(title).unwrap()) };
-        let subtitle_c = if subtitle.is_empty() { None } else { Some(CString::new(subtitle).unwrap()) };
+        let title_c = if title.is_empty() {
+            None
+        } else {
+            Some(CString::new(title).unwrap())
+        };
+        let subtitle_c = if subtitle.is_empty() {
+            None
+        } else {
+            Some(CString::new(subtitle).unwrap())
+        };
 
-        let icon_bytes = if icon.is_empty() { std::ptr::null() } else { icon.as_ptr() } as *const std::os::raw::c_char;
+        let icon_bytes = if icon.is_empty() {
+            std::ptr::null()
+        } else {
+            icon.as_ptr()
+        } as *const std::os::raw::c_char;
         let icon_length = icon.len();
 
         unsafe {

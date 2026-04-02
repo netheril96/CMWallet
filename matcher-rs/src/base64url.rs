@@ -7,7 +7,9 @@ pub enum Base64UrlError {
 impl std::fmt::Display for Base64UrlError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Base64UrlError::InvalidCharacter(c) => write!(f, "Invalid character in base64url: {}", c),
+            Base64UrlError::InvalidCharacter(c) => {
+                write!(f, "Invalid character in base64url: {}", c)
+            }
             Base64UrlError::InvalidLength => write!(f, "Invalid base64url length"),
         }
     }

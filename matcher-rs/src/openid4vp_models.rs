@@ -229,12 +229,64 @@ pub struct Payee {
     pub name: String,
 }
 
-#[derive(DeJson, SerJson, Debug, Clone, Default)]
-#[nserde(default)]
-pub struct Metadata {
-    pub claims: Vec<Vec<String>>,
+/// This provides information to the provider app which credential/set is selected by the user.
+#[derive(Debug, Clone, Default)]
+pub struct SelectionMetadata<'a> {
+    pub claims: &'a [&'a [String]],
     pub dc_request_index: usize,
-    pub dcql_cred_id: String,
-    pub dcql_credential_set_index: String,
-    pub dcql_option_index: String,
+    pub dcql_cred_id: &'a str,
+    pub dcql_credential_set_index: &'a str,
+    pub dcql_option_index: &'a str,
+}
+
+impl<'a> SerJson for SelectionMetadata<'a> {
+    fn ser_json(&self, d: usize, s: &mut nanoserde::SerJsonState) {
+        s.out.push('{');
+
+        "claims".ser_json(d, s);
+        s.out.push(':');
+        s.out.push('[');
+        for (i, inner) in self.claims.iter().enumerate() {
+            if i > 0 {
+                s.out.push(',');
+            }
+            s.out.push('[');
+            for (j, item) in inner.iter().enumerate() {
+                if j > 0 {
+                    s.out.push(',');
+                }
+                item.ser_json(d, s);
+            }
+            s.out.push(']');
+        }
+        s.out.push(']');
+
+        s.out.push(',');
+        "dc_request_index".ser_json(d, s);
+        s.out.push(':');
+        self.dc_request_index.ser_json(d, s);
+
+        if !self.dcql_cred_id.is_empty() {
+            s.out.push(',');
+            "dcql_cred_id".ser_json(d, s);
+            s.out.push(':');
+            self.dcql_cred_id.ser_json(d, s);
+        }
+
+        if !self.dcql_credential_set_index.is_empty() {
+            s.out.push(',');
+            "dcql_credential_set_index".ser_json(d, s);
+            s.out.push(':');
+            self.dcql_credential_set_index.ser_json(d, s);
+        }
+
+        if !self.dcql_option_index.is_empty() {
+            s.out.push(',');
+            "dcql_option_index".ser_json(d, s);
+            s.out.push(':');
+            self.dcql_option_index.ser_json(d, s);
+        }
+
+        s.out.push('}');
+    }
 }

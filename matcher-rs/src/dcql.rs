@@ -22,10 +22,7 @@ pub fn add_all_claims<'a>(
         });
 }
 
-fn add_all_claims_from_json<'a>(
-    matched_claim_names: &mut Vec<&'a JsonValue>,
-    json: &'a JsonValue,
-) {
+fn add_all_claims_from_json<'a>(matched_claim_names: &mut Vec<&'a JsonValue>, json: &'a JsonValue) {
     match json {
         JsonValue::Object(obj) => {
             if let Some(display) = obj.get("display") {
