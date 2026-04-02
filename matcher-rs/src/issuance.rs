@@ -58,38 +58,41 @@ pub fn issuance_main(credman: &mut impl CredmanApi) -> Result<(), Box<dyn std::e
 
     for (i, r) in request.requests.iter().enumerate() {
         log::trace!("Checking request {}: protocol={}", i, r.protocol);
-        if ALLOWED_PROTOCOLS.iter().any(|s| r.protocol == *s) {
-            let regularized = RegularizedOpenId4VciRequestData::from(&r.data);
-            if matcher_data.filter.matches(&regularized) {
-                log::info!("Match found for request {} with protocol {}", i, r.protocol);
-                let icon = &matcher_data_buffer[matcher_data.icon.0..matcher_data.icon.1];
-                let entry_id = CString::new(matcher_data.entry_id.clone())?;
-                let title = if !matcher_data.title.is_empty() {
-                    Some(CString::new(matcher_data.title.clone())?)
-                } else {
-                    None
-                };
-                let subtitle = if !matcher_data.subtitle.is_empty() {
-                    Some(CString::new(matcher_data.subtitle.clone())?)
-                } else {
-                    None
-                };
-
-                log::debug!("Adding string ID entry: {}", matcher_data.entry_id);
-                credman.add_string_id_entry(
-                    &entry_id,
-                    if icon.is_empty() { None } else { Some(icon) },
-                    title.as_deref(),
-                    subtitle.as_deref(),
-                    None,
-                    None,
-                );
-                // Assuming we only need to add one entry if any request matches
-                break;
-            }
-        } else {
+        if !ALLOWED_PROTOCOLS.iter().any(|s| r.protocol == *s) {
             log::warn!("Unsupported protocol: {}", r.protocol);
+            continue;
         }
+
+        let regularized = RegularizedOpenId4VciRequestData::from(&r.data);
+        if !matcher_data.filter.matches(&regularized) {
+            continue;
+        }
+
+        log::info!("Match found for request {} with protocol {}", i, r.protocol);
+        let icon = &matcher_data_buffer[matcher_data.icon.0..matcher_data.icon.1];
+        let entry_id = CString::new(matcher_data.entry_id.clone())?;
+        let title = if !matcher_data.title.is_empty() {
+            Some(CString::new(matcher_data.title.clone())?)
+        } else {
+            None
+        };
+        let subtitle = if !matcher_data.subtitle.is_empty() {
+            Some(CString::new(matcher_data.subtitle.clone())?)
+        } else {
+            None
+        };
+
+        log::debug!("Adding string ID entry: {}", matcher_data.entry_id);
+        credman.add_string_id_entry(
+            &entry_id,
+            if icon.is_empty() { None } else { Some(icon) },
+            title.as_deref(),
+            subtitle.as_deref(),
+            None,
+            None,
+        );
+        // Assuming we only need to add one entry if any request matches
+        break;
     }
 
     log::info!("Issuance matching process completed");

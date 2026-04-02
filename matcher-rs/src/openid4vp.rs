@@ -1,7 +1,7 @@
 use crate::credman::CredmanApi;
 use crate::json_value::{DeterministicMap, JsonValue};
 pub use crate::openid4vp_models::*;
-use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use nanoserde::DeJson;
 use std::borrow::Cow;
 use std::ffi::{CStr, CString};
@@ -19,11 +19,10 @@ fn parse_protocol_request_data<'a>(
             match data {
                 ProtocolRequestData::String(s) => s,
                 ProtocolRequestData::Object(obj) => {
-                    if !obj.request.is_empty() {
-                        &obj.request
-                    } else {
+                    if obj.request.is_empty() {
                         return Err("Missing 'request' field in signed data object".into());
                     }
+                    &obj.request
                 }
             }
         } else if !pr.request.is_empty() {
@@ -33,28 +32,30 @@ fn parse_protocol_request_data<'a>(
         };
 
         let parts: Vec<&str> = jws.split('.').collect();
-        if parts.len() >= 2 {
-            let decoded = decode_base64url(parts[1])?;
-            Ok(Cow::Owned(DeJson::deserialize_json(
-                std::str::from_utf8(&decoded)?,
-            )?))
-        } else {
+        if parts.len() < 2 {
             log::error!("Invalid JWS parts");
-            Err("Invalid JWS".into())
+            return Err("Invalid JWS".into());
         }
-    } else {
-        log::debug!("Handling unsigned OpenID4VP request");
-        if let Some(data) = &pr.data {
-            match data {
-                ProtocolRequestData::Object(obj) => Ok(Cow::Borrowed(obj)),
-                ProtocolRequestData::String(s) => Ok(Cow::Owned(DeJson::deserialize_json(s)?)),
-            }
-        } else if !pr.request.is_empty() {
-            Ok(Cow::Owned(DeJson::deserialize_json(&pr.request)?))
-        } else {
-            Err("Missing unsigned request data".into())
-        }
+
+        let decoded = decode_base64url(parts[1])?;
+        return Ok(Cow::Owned(DeJson::deserialize_json(std::str::from_utf8(
+            &decoded,
+        )?)?));
     }
+
+    log::debug!("Handling unsigned OpenID4VP request");
+    if let Some(data) = &pr.data {
+        return match data {
+            ProtocolRequestData::Object(obj) => Ok(Cow::Borrowed(obj)),
+            ProtocolRequestData::String(s) => Ok(Cow::Owned(DeJson::deserialize_json(s)?)),
+        };
+    }
+
+    if !pr.request.is_empty() {
+        return Ok(Cow::Owned(DeJson::deserialize_json(&pr.request)?));
+    }
+
+    Err("Missing unsigned request data".into())
 }
 
 pub fn openid4vp_main(credman: &mut impl CredmanApi) -> Result<(), Box<dyn std::error::Error>> {
@@ -109,15 +110,16 @@ pub fn openid4vp_main(credman: &mut impl CredmanApi) -> Result<(), Box<dyn std::
 
     for (i, pr) in protocol_requests.iter().enumerate() {
         log::debug!("Processing request {}: protocol={}", i, pr.protocol);
-        if pr.protocol == "openid4vp-v1-unsigned" || pr.protocol == "openid4vp-v1-signed" {
-            let data_json = parse_protocol_request_data(pr)?;
-            let query = data_json.dcql_query.as_ref().ok_or("Missing dcql_query")?;
-            let match_result = crate::dcql::dcql_query(query, &registry);
-
-            report_match_result(credman, &match_result, i, &data_json, &matcher_data_buffer)?;
-        } else {
+        if pr.protocol != "openid4vp-v1-unsigned" && pr.protocol != "openid4vp-v1-signed" {
             log::warn!("Unsupported protocol: {}", pr.protocol);
+            continue;
         }
+
+        let data_json = parse_protocol_request_data(pr)?;
+        let query = data_json.dcql_query.as_ref().ok_or("Missing dcql_query")?;
+        let match_result = crate::dcql::dcql_query(query, &registry);
+
+        report_match_result(credman, &match_result, i, &data_json, &matcher_data_buffer)?;
     }
 
     log::info!("OpenID4VP matching process completed");
@@ -154,17 +156,18 @@ fn report_credential_set_length(
 ) {
     if curr_set_idx == matched_credential_sets.len() {
         credman.add_entry_set(set_id, curr_length as i32);
-    } else {
-        let options = &matched_credential_sets[curr_set_idx];
-        for opt in options {
-            report_credential_set_length(
-                credman,
-                set_id,
-                curr_length + opt.matched_credential_ids.len(),
-                curr_set_idx + 1,
-                matched_credential_sets,
-            );
-        }
+        return;
+    }
+
+    let options = &matched_credential_sets[curr_set_idx];
+    for opt in options {
+        report_credential_set_length(
+            credman,
+            set_id,
+            curr_length + opt.matched_credential_ids.len(),
+            curr_set_idx + 1,
+            matched_credential_sets,
+        );
     }
 }
 
@@ -266,47 +269,45 @@ fn report_standard_verification_entry(
         c.id
     );
     for claim in &c.matched_claim_names {
-        if let JsonValue::Object(obj) = claim {
-            if let Some(JsonValue::Object(v)) = obj.get("verification") {
-                if let Some(JsonValue::String(display_name)) = v.get("display") {
-                    let display_value = match v.get("display_value") {
-                        Some(JsonValue::String(s)) => {
-                            if !s.is_empty() {
-                                Some(CString::new(s.clone())?)
-                            } else {
-                                None
-                            }
-                        }
-                        _ => None,
-                    };
-                    let name_cstr = CString::new(display_name.clone())?;
-                    credman.add_field_to_entry_set(
-                        &cred_id_cstr,
-                        &name_cstr,
-                        display_value.as_deref(),
-                        set_id,
-                        doc_idx,
-                    );
-                }
-            }
-        }
+        let JsonValue::Object(obj) = claim else {
+            continue;
+        };
+
+        let Some(JsonValue::Object(v)) = obj.get("verification") else {
+            continue;
+        };
+
+        let Some(JsonValue::String(display_name)) = v.get("display") else {
+            continue;
+        };
+
+        let display_value = match v.get("display_value") {
+            Some(JsonValue::String(s)) if !s.is_empty() => Some(CString::new(s.clone())?),
+            _ => None,
+        };
+
+        let name_cstr = CString::new(display_name.clone())?;
+        credman.add_field_to_entry_set(
+            &cred_id_cstr,
+            &name_cstr,
+            display_value.as_deref(),
+            set_id,
+            doc_idx,
+        );
     }
 
-    if wasm_version >= 5 {
-        if !c.display.verification.metadata_display_text.is_empty() {
-            let meta_text_cstr =
-                CString::new(c.display.verification.metadata_display_text.clone())?;
-            log::trace!(
-                "Adding metadata display text: {}",
-                c.display.verification.metadata_display_text
-            );
-            credman.add_metadata_display_text_to_entry_set(
-                &cred_id_cstr,
-                &meta_text_cstr,
-                set_id,
-                doc_idx,
-            );
-        }
+    if wasm_version >= 5 && !c.display.verification.metadata_display_text.is_empty() {
+        let meta_text_cstr = CString::new(c.display.verification.metadata_display_text.clone())?;
+        log::trace!(
+            "Adding metadata display text: {}",
+            c.display.verification.metadata_display_text
+        );
+        credman.add_metadata_display_text_to_entry_set(
+            &cred_id_cstr,
+            &meta_text_cstr,
+            set_id,
+            doc_idx,
+        );
     }
     Ok(())
 }
@@ -386,41 +387,46 @@ fn report_matched_credential_set(
     creds_blob: &[u8],
     transaction_info: &Option<(Vec<String>, String, String, String)>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    if curr_set_idx < matched_credential_sets.len() {
-        let options = &matched_credential_sets[curr_set_idx];
-        for opt in options {
-            let mut doc_idx = *curr_doc_idx;
-            for cred_id in &opt.matched_credential_ids {
-                if let Some(doc) = matched_docs.get(cred_id) {
-                    report_matched_credential(
-                        credman,
-                        wasm_version,
-                        doc,
-                        cred_id,
-                        doc_idx,
-                        request_id,
-                        set_id,
-                        Some(&opt.set_id),
-                        Some(&opt.option_id),
-                        creds_blob,
-                        transaction_info,
-                    )?;
-                    doc_idx += 1;
-                }
-            }
-            report_matched_credential_set(
+    if curr_set_idx >= matched_credential_sets.len() {
+        return Ok(());
+    }
+
+    let options = &matched_credential_sets[curr_set_idx];
+    for opt in options {
+        let mut doc_idx = *curr_doc_idx;
+        for cred_id in &opt.matched_credential_ids {
+            let Some(doc) = matched_docs.get(cred_id) else {
+                continue;
+            };
+
+            report_matched_credential(
                 credman,
-                set_id,
-                curr_set_idx + 1,
-                matched_credential_sets,
-                &mut doc_idx,
                 wasm_version,
-                matched_docs,
+                doc,
+                cred_id,
+                doc_idx,
                 request_id,
+                set_id,
+                Some(&opt.set_id),
+                Some(&opt.option_id),
                 creds_blob,
                 transaction_info,
             )?;
+            doc_idx += 1;
         }
+
+        report_matched_credential_set(
+            credman,
+            set_id,
+            curr_set_idx + 1,
+            matched_credential_sets,
+            &mut doc_idx,
+            wasm_version,
+            matched_docs,
+            request_id,
+            creds_blob,
+            transaction_info,
+        )?;
     }
     Ok(())
 }
@@ -428,64 +434,47 @@ fn report_matched_credential_set(
 fn extract_transaction_info(
     data_json: &OpenId4VpData,
 ) -> Result<Option<(Vec<String>, String, String, String)>, Box<dyn std::error::Error>> {
-    if !data_json.transaction_data.is_empty() {
-        if data_json.transaction_data.len() == 1 {
-            log::debug!("Decoding transaction data");
-            let decoded = decode_base64url(&data_json.transaction_data[0])?;
-            let td: TransactionData = DeJson::deserialize_json(std::str::from_utf8(&decoded)?)?;
+    if data_json.transaction_data.len() != 1 {
+        return Ok(None);
+    }
 
-            let merchant_name = td.merchant_name.clone();
-            let mut transaction_amount = td.amount.clone();
-            let additional_info = td.additional_info.clone();
+    log::debug!("Decoding transaction data");
+    let decoded = decode_base64url(&data_json.transaction_data[0])?;
+    let td: TransactionData = DeJson::deserialize_json(std::str::from_utf8(&decoded)?)?;
 
-            if !td.transaction_type.is_empty() {
-                log::trace!("Transaction type: {}", td.transaction_type);
-                if td.transaction_type == "urn:eudi:sca:payment:1" {
-                    if let Some(payload) = &td.payload {
-                        let merchant_name = payload.payee.as_ref().map(|p| p.name.clone()).unwrap_or_default();
-                        transaction_amount = if !payload.amount_display.is_empty() {
-                            payload.amount_display.clone()
-                        } else {
-                            if !payload.currency.is_empty() {
-                                format!("{} {:.2}", payload.currency, payload.amount.unwrap_or(0.0))
-                            } else {
-                                format!("{:.2}", payload.amount.unwrap_or(0.0))
-                            }
-                        };
-                        log::info!(
-                            "Found transaction data (sca): merchant={}, amount={}",
-                            merchant_name,
-                            transaction_amount
-                        );
-                        return Ok(Some((
-                            td.credential_ids,
-                            merchant_name,
-                            transaction_amount,
-                            additional_info,
-                        )));
-                    }
-                } else if td.transaction_type == "payment_details" {
-                    let merchant_name = td.payee_name.clone();
-                    transaction_amount = format!(
-                        "{} {}",
-                        td.payment_currency,
-                        td.payment_amount
-                    );
-                    log::info!(
-                        "Found transaction data (details): merchant={}, amount={}",
-                        merchant_name,
-                        transaction_amount
-                    );
-                    return Ok(Some((
-                        td.credential_ids,
-                        merchant_name,
-                        transaction_amount,
-                        additional_info,
-                    )));
-                }
+    if !td.transaction_type.is_empty() {
+        log::trace!("Transaction type: {}", td.transaction_type);
+        if td.transaction_type == "urn:eudi:sca:payment:1" {
+            if let Some(payload) = &td.payload {
+                let merchant_name = payload
+                    .payee
+                    .as_ref()
+                    .map(|p| p.name.clone())
+                    .unwrap_or_default();
+                let transaction_amount = if !payload.amount_display.is_empty() {
+                    payload.amount_display.clone()
+                } else if !payload.currency.is_empty() {
+                    format!("{} {:.2}", payload.currency, payload.amount.unwrap_or(0.0))
+                } else {
+                    format!("{:.2}", payload.amount.unwrap_or(0.0))
+                };
+                log::info!(
+                    "Found transaction data (sca): merchant={}, amount={}",
+                    merchant_name,
+                    transaction_amount
+                );
+                return Ok(Some((
+                    td.credential_ids,
+                    merchant_name,
+                    transaction_amount,
+                    td.additional_info.clone(),
+                )));
             }
+        } else if td.transaction_type == "payment_details" {
+            let merchant_name = td.payee_name.clone();
+            let transaction_amount = format!("{} {}", td.payment_currency, td.payment_amount);
             log::info!(
-                "Found transaction data: merchant={}, amount={}",
+                "Found transaction data (details): merchant={}, amount={}",
                 merchant_name,
                 transaction_amount
             );
@@ -493,11 +482,22 @@ fn extract_transaction_info(
                 td.credential_ids,
                 merchant_name,
                 transaction_amount,
-                additional_info,
+                td.additional_info.clone(),
             )));
         }
     }
-    Ok(None)
+
+    log::info!(
+        "Found transaction data: merchant={}, amount={}",
+        td.merchant_name,
+        td.amount
+    );
+    Ok(Some((
+        td.credential_ids,
+        td.merchant_name,
+        td.amount,
+        td.additional_info,
+    )))
 }
 
 fn report_match_result(
@@ -542,30 +542,32 @@ fn report_match_result(
 
             let mut doc_idx = 0;
             for cred_id in &opt.matched_credential_ids {
-                if let Some(doc) = res.matched_credentials.get(cred_id) {
-                    report_matched_credential(
-                        credman,
-                        wasm_version,
-                        doc,
-                        cred_id,
-                        doc_idx,
-                        request_idx,
-                        &set_id_cstr,
-                        if opt.set_id.is_empty() {
-                            None
-                        } else {
-                            Some(&opt.set_id)
-                        },
-                        if opt.option_id.is_empty() {
-                            None
-                        } else {
-                            Some(&opt.option_id)
-                        },
-                        creds_blob,
-                        &transaction_info,
-                    )?;
-                    doc_idx += 1;
-                }
+                let Some(doc) = res.matched_credentials.get(cred_id) else {
+                    continue;
+                };
+
+                report_matched_credential(
+                    credman,
+                    wasm_version,
+                    doc,
+                    cred_id,
+                    doc_idx,
+                    request_idx,
+                    &set_id_cstr,
+                    if opt.set_id.is_empty() {
+                        None
+                    } else {
+                        Some(&opt.set_id)
+                    },
+                    if opt.option_id.is_empty() {
+                        None
+                    } else {
+                        Some(&opt.option_id)
+                    },
+                    creds_blob,
+                    &transaction_info,
+                )?;
+                doc_idx += 1;
             }
 
             let mut next_doc_idx = doc_idx;
