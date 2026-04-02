@@ -1,4 +1,4 @@
-use crate::json_value::{DeterministicMap, JsonValue};
+use crate::json_value::{DeterministicMap, DeterministicSet, JsonValue};
 use nanoserde::{DeJson, SerJson};
 
 #[derive(DeJson, Debug, Clone, Default)]
@@ -104,7 +104,7 @@ pub struct RegistryIssuanceEntry {
     pub title: String,
     pub subtitle: String,
     pub icon: Option<RegistryIcon>,
-    pub supported: Vec<String>,
+    pub supported: DeterministicSet<String>,
 }
 
 #[derive(DeJson, Debug, Clone, Default)]
