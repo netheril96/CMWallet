@@ -126,27 +126,6 @@ pub fn openid4vp_main(credman: &mut impl CredmanApi) -> Result<(), Box<dyn std::
     Ok(())
 }
 
-fn serialize_json_value(val: &JsonValue) -> String {
-    match val {
-        JsonValue::String(s) => format!("\"{}\"", s.replace('"', "\\\"")),
-        JsonValue::Integer(n) => n.to_string(),
-        JsonValue::Float(n) => n.to_string(),
-        JsonValue::Bool(b) => b.to_string(),
-        JsonValue::Null => "null".to_string(),
-        JsonValue::Array(arr) => {
-            let items: Vec<String> = arr.iter().map(serialize_json_value).collect();
-            format!("[{}]", items.join(","))
-        }
-        JsonValue::Object(obj) => {
-            let items: Vec<String> = obj
-                .iter()
-                .map(|(k, v)| format!("\"{}\":{}", k, serialize_json_value(v)))
-                .collect();
-            format!("{{{}}}", items.join(","))
-        }
-    }
-}
-
 fn report_credential_set_length(
     credman: &mut impl CredmanApi,
     set_id: &CStr,
@@ -896,73 +875,6 @@ mod test {
         blob
     }
 
-    fn normalize_json(val: JsonValue) -> JsonValue {
-        match val {
-            JsonValue::Array(arr) => {
-                // Check if it's an array of [number, object] from expected_json map serialization
-                let is_map = !arr.is_empty()
-                    && arr.iter().all(|item| {
-                        if let JsonValue::Array(pair) = item {
-                            pair.len() == 2
-                                && matches!(pair[0], JsonValue::Integer(_) | JsonValue::Float(_))
-                                && matches!(pair[1], JsonValue::Object(_))
-                        } else {
-                            false
-                        }
-                    });
-
-                if is_map {
-                    let mut obj = DeterministicMap::new();
-                    for item in arr {
-                        if let JsonValue::Array(mut pair) = item {
-                            let val = pair.pop().unwrap();
-                            let key = pair.pop().unwrap();
-                            match key {
-                                JsonValue::Integer(k) => {
-                                    obj.insert(k.to_string(), normalize_json(val));
-                                }
-                                JsonValue::Float(k) => {
-                                    obj.insert(k.to_string(), normalize_json(val));
-                                }
-                                _ => {}
-                            }
-                        }
-                    }
-                    JsonValue::Object(obj)
-                } else {
-                    let mut normalized_arr: Vec<JsonValue> =
-                        arr.into_iter().map(normalize_json).collect();
-                    // Sort the array by serialized string representation to make comparison deterministic
-                    normalized_arr.sort_by(|a, b| {
-                        let a_str = serialize_json_value(a);
-                        let b_str = serialize_json_value(b);
-                        a_str.cmp(&b_str)
-                    });
-                    JsonValue::Array(normalized_arr)
-                }
-            }
-            JsonValue::Object(obj) => {
-                // Some empty arrays in nlohmann::json might be empty objects if it couldn't infer the type
-                // But wait, if expected has empty object for fields, and we have empty array, let's normalize both to empty array
-                // For simplicity, let's just normalize the contents.
-                let mut new_obj = DeterministicMap::new();
-                for (k, v) in obj.0.clone() {
-                    if k == "fields" {
-                        if let JsonValue::Object(inner) = &v {
-                            if inner.is_empty() {
-                                new_obj.insert(k, JsonValue::Array(Vec::new()));
-                                continue;
-                            }
-                        }
-                    }
-                    new_obj.insert(k, normalize_json(v));
-                }
-                JsonValue::Object(new_obj)
-            }
-            _ => val,
-        }
-    }
-
     fn run_test_impl(test_name: &str, custom_registry: Option<&str>) {
         let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
         let testdata_dir = std::path::PathBuf::from(manifest_dir).join("../matcher/testdata");
@@ -991,15 +903,10 @@ mod test {
             standalone_entries: credman.standalone_entries,
         };
 
-        let result_json_str = SerJson::serialize_json(&result);
-        let result_val: JsonValue = DeJson::deserialize_json(&result_json_str).unwrap();
-        let result_normalized = normalize_json(result_val);
-
-        let expected_raw: JsonValue = DeJson::deserialize_json(&expected_json).unwrap();
-        let expected_normalized = normalize_json(expected_raw);
+        let expected_result: FakeCredmanResult = DeJson::deserialize_json(&expected_json).unwrap();
 
         assert_eq!(
-            result_normalized, expected_normalized,
+            result, expected_result,
             "Test {} failed",
             test_name
         );

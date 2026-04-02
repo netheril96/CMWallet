@@ -72,7 +72,7 @@ struct FakeEntrySet {
     std::string setId;
     int setLength;
     // setIndex -> credId -> entry
-    std::map<int, std::map<std::string, FakeEntry>> entries;
+    std::map<std::string, std::map<std::string, FakeEntry>> entries;
 };
 
 void to_json(json& j, const FakeEntrySet& s) {
@@ -167,7 +167,7 @@ void AddEntryToSet(const char* cred_id, const char* icon, size_t icon_len, const
     entry.disclaimer = disclaimer ? disclaimer : "";
     entry.warning = warning ? warning : "";
     std::string s_id = set_id ? set_id : "";
-    FakeCredman::GetInstance().entrySets[s_id].entries[set_index][entry.credId] = entry;
+    FakeCredman::GetInstance().entrySets[s_id].entries[std::to_string(set_index)][entry.credId] = entry;
 }
 
 void AddFieldToEntrySet(const char* cred_id, const char* field_display_name, const char* field_display_value, const char* set_id, int set_index) {
@@ -175,7 +175,7 @@ void AddFieldToEntrySet(const char* cred_id, const char* field_display_name, con
     std::string f_name = field_display_name ? field_display_name : "";
     std::string f_val = field_display_value ? field_display_value : "";
     std::string s_id = set_id ? set_id : "";
-    FakeCredman::GetInstance().entrySets[s_id].entries[set_index][c_id].fields.push_back({f_name, f_val});
+    FakeCredman::GetInstance().entrySets[s_id].entries[std::to_string(set_index)][c_id].fields.push_back({f_name, f_val});
 }
 
 void AddPaymentEntryToSetV2(const char* cred_id, const char* merchant_name, const char* payment_method_name, const char* payment_method_subtitle, const char* payment_method_icon, size_t payment_method_icon_len, const char* transaction_amount, const char* bank_icon, size_t bank_icon_len, const char* payment_provider_icon, size_t payment_provider_icon_len, const char* additional_info, const char* metadata, const char* set_id, int set_index) {
@@ -186,7 +186,7 @@ void AddPaymentEntryToSetV2(const char* cred_id, const char* merchant_name, cons
     entry.transaction_amount = transaction_amount ? transaction_amount : "";
     entry.additional_info = additional_info ? additional_info : "";
     std::string s_id = set_id ? set_id : "";
-    FakeCredman::GetInstance().entrySets[s_id].entries[set_index][entry.credId] = entry;
+    FakeCredman::GetInstance().entrySets[s_id].entries[std::to_string(set_index)][entry.credId] = entry;
 }
 
 void AddPaymentEntryToSet(const char* cred_id, const char* merchant_name, const char* payment_method_name, const char* payment_method_subtitle, const char* payment_method_icon, size_t payment_method_icon_len, const char* transaction_amount, const char* bank_icon, size_t bank_icon_len, const char* payment_provider_icon, size_t payment_provider_icon_len, const char* metadata, const char* set_id, int set_index) {
@@ -197,7 +197,7 @@ void AddMetadataDisplayTextToEntrySet(const char *cred_id, const char *metadata_
     std::string c_id = cred_id ? cred_id : "";
     std::string m_text = metadata_display_text ? metadata_display_text : "";
     std::string s_id = set_id ? set_id : "";
-    FakeCredman::GetInstance().entrySets[s_id].entries[set_index][c_id].metadata_display_text = m_text;
+    FakeCredman::GetInstance().entrySets[s_id].entries[std::to_string(set_index)][c_id].metadata_display_text = m_text;
 }
 
 void AddInlineIssuanceEntry(const char* cred_id, const char* icon, size_t icon_len, const char* title, const char* subtitle) {

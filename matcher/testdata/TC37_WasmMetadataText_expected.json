@@ -1,125 +1,122 @@
 {
   "entrySets": {
     "req:0;null": {
-      "entries": [
-        [
-          0,
-          {
-            "mdoc_cred_1": {
-              "additional_info": "",
-              "credId": "mdoc_cred_1",
-              "disclaimer": "",
-              "fields": [
-                [
-                  "Family Name",
-                  "Doe"
-                ],
-                [
-                  "Given Name",
-                  "John"
-                ],
-                [
-                  "Age",
-                  ""
-                ],
-                [
-                  "Over 21",
-                  "Yes"
-                ]
+      "entries": {
+        "0": {
+          "mdoc_cred_1": {
+            "additional_info": "",
+            "credId": "mdoc_cred_1",
+            "disclaimer": "",
+            "fields": [
+              [
+                "Family Name",
+                "Doe"
               ],
-              "merchant_name": "",
-              "metadata_display_text": "Verified Member",
-              "subtitle": "",
-              "title": "John's Driving License",
-              "transaction_amount": "",
-              "type": "Verification",
-              "warning": ""
-            },
-            "mdoc_cred_3": {
-              "additional_info": "",
-              "credId": "mdoc_cred_3",
-              "disclaimer": "",
-              "fields": [
-                [
-                  "Family Name",
-                  ""
-                ],
-                [
-                  "Given Name",
-                  ""
-                ],
-                [
-                  "Age",
-                  ""
-                ],
-                [
-                  "Over 21",
-                  ""
-                ]
+              [
+                "Given Name",
+                "John"
               ],
-              "merchant_name": "",
-              "metadata_display_text": "",
-              "subtitle": "",
-              "title": "Alice's Driving License",
-              "transaction_amount": "",
-              "type": "Verification",
-              "warning": ""
-            },
-            "mdoc_cred_4": {
-              "additional_info": "",
-              "credId": "mdoc_cred_4",
-              "disclaimer": "",
-              "fields": [
-                [
-                  "Family Name",
-                  ""
-                ],
-                [
-                  "Given Name",
-                  ""
-                ],
-                [
-                  "Age",
-                  ""
-                ],
-                [
-                  "Over 21",
-                  ""
-                ]
+              [
+                "Age",
+                ""
               ],
-              "merchant_name": "",
-              "metadata_display_text": "",
-              "subtitle": "",
-              "title": "Jane's Driving License",
-              "transaction_amount": "",
-              "type": "Verification",
-              "warning": ""
-            },
-            "mdoc_cred_underage": {
-              "additional_info": "",
-              "credId": "mdoc_cred_underage",
-              "disclaimer": "",
-              "fields": [
-                [
-                  "Age",
-                  ""
-                ],
-                [
-                  "Over 21",
-                  "Yes"
-                ]
+              [
+                "Over 21",
+                "Yes"
+              ]
+            ],
+            "merchant_name": "",
+            "metadata_display_text": "Verified Member",
+            "subtitle": "",
+            "title": "John's Driving License",
+            "transaction_amount": "",
+            "type": "Verification",
+            "warning": ""
+          },
+          "mdoc_cred_3": {
+            "additional_info": "",
+            "credId": "mdoc_cred_3",
+            "disclaimer": "",
+            "fields": [
+              [
+                "Family Name",
+                ""
               ],
-              "merchant_name": "",
-              "metadata_display_text": "",
-              "subtitle": "",
-              "title": "Underage License",
-              "transaction_amount": "",
-              "type": "Verification",
-              "warning": ""
-            }
+              [
+                "Given Name",
+                ""
+              ],
+              [
+                "Age",
+                ""
+              ],
+              [
+                "Over 21",
+                ""
+              ]
+            ],
+            "merchant_name": "",
+            "metadata_display_text": "",
+            "subtitle": "",
+            "title": "Alice's Driving License",
+            "transaction_amount": "",
+            "type": "Verification",
+            "warning": ""
+          },
+          "mdoc_cred_4": {
+            "additional_info": "",
+            "credId": "mdoc_cred_4",
+            "disclaimer": "",
+            "fields": [
+              [
+                "Family Name",
+                ""
+              ],
+              [
+                "Given Name",
+                ""
+              ],
+              [
+                "Age",
+                ""
+              ],
+              [
+                "Over 21",
+                ""
+              ]
+            ],
+            "merchant_name": "",
+            "metadata_display_text": "",
+            "subtitle": "",
+            "title": "Jane's Driving License",
+            "transaction_amount": "",
+            "type": "Verification",
+            "warning": ""
+          },
+          "mdoc_cred_underage": {
+            "additional_info": "",
+            "credId": "mdoc_cred_underage",
+            "disclaimer": "",
+            "fields": [
+              [
+                "Age",
+                ""
+              ],
+              [
+                "Over 21",
+                "Yes"
+              ]
+            ],
+            "merchant_name": "",
+            "metadata_display_text": "",
+            "subtitle": "",
+            "title": "Underage License",
+            "transaction_amount": "",
+            "type": "Verification",
+            "warning": ""
           }
-        ]
-      ],
+        }
+      },
       "setId": "req:0;null",
       "setLength": 1
     }
