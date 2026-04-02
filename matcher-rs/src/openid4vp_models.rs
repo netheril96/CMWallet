@@ -107,50 +107,46 @@ pub struct RegistryIssuanceEntry {
     pub supported: DeterministicSet<String>,
 }
 
-#[derive(DeJson, Debug, Clone, Default)]
-#[nserde(default)]
-pub struct MatchedClaim {
-    pub display: JsonValue, // RegistryClaimDisplay
-    pub path: Vec<String>,
+use std::borrow::Cow;
+
+#[derive(Debug, Clone)]
+pub struct MatchedClaim<'a> {
+    pub display: &'a JsonValue, // RegistryClaimDisplay
+    pub path: &'a [String],
 }
 
-#[derive(DeJson, Debug, Clone, Default)]
-#[nserde(default)]
-pub struct MatchedCredential {
-    pub id: String,
-    pub display: RegistryDisplay,
-    pub matched_claim_names: Vec<JsonValue>, // RegistryClaimDisplay
-    pub matched_claim_metadata: Vec<Vec<String>>,
+#[derive(Debug, Clone)]
+pub struct MatchedCredential<'a> {
+    pub id: &'a str,
+    pub display: &'a RegistryDisplay,
+    pub matched_claim_names: Vec<&'a JsonValue>, // RegistryClaimDisplay
+    pub matched_claim_metadata: Vec<&'a [String]>,
 }
 
-#[derive(DeJson, Debug, Clone, Default)]
-#[nserde(default)]
-pub struct MatchCredentialResult {
-    pub matched_creds: Vec<MatchedCredential>,
-    pub inline_issuance: Option<RegistryIssuanceEntry>,
+#[derive(Debug, Clone)]
+pub struct MatchCredentialResult<'a> {
+    pub matched_creds: Vec<MatchedCredential<'a>>,
+    pub inline_issuance: Option<&'a RegistryIssuanceEntry>,
 }
 
-#[derive(DeJson, Debug, Clone, Default)]
-#[nserde(default)]
-pub struct DcqlMatchResult {
-    pub matched_credential_sets: Vec<Vec<MatchedCredentialSetInfo>>,
-    pub matched_credentials: DeterministicMap<String, DcqlMatchedCredentialEntry>,
-    pub inline_issuance: Option<RegistryIssuanceEntry>,
+#[derive(Debug, Clone)]
+pub struct DcqlMatchResult<'a> {
+    pub matched_credential_sets: Vec<Vec<MatchedCredentialSetInfo<'a>>>,
+    pub matched_credentials: DeterministicMap<&'a str, DcqlMatchedCredentialEntry<'a>>,
+    pub inline_issuance: Option<&'a RegistryIssuanceEntry>,
 }
 
-#[derive(DeJson, Debug, Clone, Default)]
-#[nserde(default)]
-pub struct MatchedCredentialSetInfo {
-    pub set_id: String,
-    pub option_id: String,
-    pub matched_credential_ids: Vec<String>,
+#[derive(Debug, Clone)]
+pub struct MatchedCredentialSetInfo<'a> {
+    pub set_id: Cow<'a, str>,
+    pub option_id: Cow<'a, str>,
+    pub matched_credential_ids: Vec<&'a str>,
 }
 
-#[derive(DeJson, Debug, Clone, Default)]
-#[nserde(default)]
-pub struct DcqlMatchedCredentialEntry {
-    pub id: String,
-    pub matched: Vec<MatchedCredential>,
+#[derive(Debug, Clone)]
+pub struct DcqlMatchedCredentialEntry<'a> {
+    pub id: &'a str,
+    pub matched: Vec<MatchedCredential<'a>>,
 }
 
 #[derive(DeJson, Debug, Clone, Default)]

@@ -130,7 +130,7 @@ fn report_credential_set_length(
     set_id: &str,
     curr_length: usize,
     curr_set_idx: usize,
-    matched_credential_sets: &[Vec<MatchedCredentialSetInfo>],
+    matched_credential_sets: &[Vec<MatchedCredentialSetInfo<'_>>],
 ) {
     if curr_set_idx == matched_credential_sets.len() {
         credman.add_entry_set(set_id, curr_length as i32);
@@ -151,7 +151,7 @@ fn report_credential_set_length(
 
 fn report_payment_transaction_entry(
     credman: &mut impl CredmanApi,
-    c: &MatchedCredential,
+    c: &MatchedCredential<'_>,
     doc_idx: i32,
     set_id: &str,
     metadata_str: &str,
@@ -170,7 +170,7 @@ fn report_payment_transaction_entry(
         .map_or(&[][..], |i| &creds_blob[i.start..i.start + i.length]);
 
     credman.add_payment_entry_to_set_v2(
-        &c.id,
+        c.id,
         merchant,
         &c.display.verification.title,
         &c.display.verification.subtitle,
@@ -189,7 +189,7 @@ fn report_payment_transaction_entry(
 fn report_standard_verification_entry(
     credman: &mut impl CredmanApi,
     wasm_version: u32,
-    c: &MatchedCredential,
+    c: &MatchedCredential<'_>,
     doc_idx: i32,
     set_id: &str,
     metadata_str: &str,
@@ -205,7 +205,7 @@ fn report_standard_verification_entry(
         .map_or(&[][..], |i| &creds_blob[i.start..i.start + i.length]);
 
     credman.add_entry_to_set(
-        &c.id,
+        c.id,
         icon_bytes,
         &c.display.verification.title,
         &c.display.verification.subtitle,
@@ -266,7 +266,7 @@ fn report_standard_verification_entry(
 fn report_matched_credential(
     credman: &mut impl CredmanApi,
     wasm_version: u32,
-    matched_doc: &DcqlMatchedCredentialEntry,
+    matched_doc: &DcqlMatchedCredentialEntry<'_>,
     matched_credential_id: &str,
     doc_idx: i32,
     request_id: usize,
@@ -284,7 +284,7 @@ fn report_matched_credential(
     );
     for c in &matched_doc.matched {
         let metadata = Metadata {
-            claims: c.matched_claim_metadata.clone(),
+            claims: c.matched_claim_metadata.iter().map(|v| v.to_vec()).collect(),
             dc_request_index: request_id,
             dcql_cred_id: matched_credential_id.to_string(),
             dcql_credential_set_index: dcql_set_idx.unwrap_or("").to_string(),
@@ -329,10 +329,10 @@ fn report_matched_credential_set(
     credman: &mut impl CredmanApi,
     set_id: &str,
     curr_set_idx: usize,
-    matched_credential_sets: &[Vec<MatchedCredentialSetInfo>],
+    matched_credential_sets: &[Vec<MatchedCredentialSetInfo<'_>>],
     curr_doc_idx: &mut i32,
     wasm_version: u32,
-    matched_docs: &DeterministicMap<String, DcqlMatchedCredentialEntry>,
+    matched_docs: &DeterministicMap<&str, DcqlMatchedCredentialEntry<'_>>,
     request_id: usize,
     creds_blob: &[u8],
     transaction_info: &Option<(Vec<String>, String, String, String)>,
@@ -345,7 +345,7 @@ fn report_matched_credential_set(
     for opt in options {
         let mut doc_idx = *curr_doc_idx;
         for cred_id in &opt.matched_credential_ids {
-            let Some(doc) = matched_docs.get(cred_id) else {
+            let Some(doc) = matched_docs.get(*cred_id) else {
                 continue;
             };
 
@@ -452,7 +452,7 @@ fn extract_transaction_info(
 
 fn report_match_result(
     credman: &mut impl CredmanApi,
-    res: &DcqlMatchResult,
+    res: &DcqlMatchResult<'_>,
     request_idx: usize,
     data_json: &OpenId4VpData,
     creds_blob: &[u8],
@@ -491,7 +491,7 @@ fn report_match_result(
 
             let mut doc_idx = 0;
             for cred_id in &opt.matched_credential_ids {
-                let Some(doc) = res.matched_credentials.get(cred_id) else {
+                let Some(doc) = res.matched_credentials.get(*cred_id) else {
                     continue;
                 };
 
