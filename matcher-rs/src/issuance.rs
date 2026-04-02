@@ -64,16 +64,16 @@ pub fn issuance_main(credman: &mut impl CredmanApi) -> Result<(), Box<dyn std::e
                 log::info!("Match found for request {} with protocol {}", i, r.protocol);
                 let icon = &matcher_data_buffer[matcher_data.icon.0..matcher_data.icon.1];
                 let entry_id = CString::new(matcher_data.entry_id.clone())?;
-                let title = matcher_data
-                    .title
-                    .as_ref()
-                    .map(|s| CString::new(s.clone()))
-                    .transpose()?;
-                let subtitle = matcher_data
-                    .subtitle
-                    .as_ref()
-                    .map(|s| CString::new(s.clone()))
-                    .transpose()?;
+                let title = if !matcher_data.title.is_empty() {
+                    Some(CString::new(matcher_data.title.clone())?)
+                } else {
+                    None
+                };
+                let subtitle = if !matcher_data.subtitle.is_empty() {
+                    Some(CString::new(matcher_data.subtitle.clone())?)
+                } else {
+                    None
+                };
 
                 log::debug!("Adding string ID entry: {}", matcher_data.entry_id);
                 credman.add_string_id_entry(
@@ -104,10 +104,10 @@ mod test {
     struct AddedEntry {
         entry_id: CString,
         icon: Vec<u8>,
-        title: Option<CString>,
-        subtitle: Option<CString>,
-        disclaimer: Option<CString>,
-        warning: Option<CString>,
+        title: CString,
+        subtitle: CString,
+        disclaimer: CString,
+        warning: CString,
     }
 
     struct FakeCredman {
@@ -146,10 +146,10 @@ mod test {
             self.added_entries.push(AddedEntry {
                 entry_id: entry_id.to_owned(),
                 icon: icon.map(|i| i.to_vec()).unwrap_or_default(),
-                title: title.map(|c| c.to_owned()),
-                subtitle: subtitle.map(|c| c.to_owned()),
-                disclaimer: disclaimer.map(|c| c.to_owned()),
-                warning: warning.map(|c| c.to_owned()),
+                title: title.map(|c| c.to_owned()).unwrap_or_default(),
+                subtitle: subtitle.map(|c| c.to_owned()).unwrap_or_default(),
+                disclaimer: disclaimer.map(|c| c.to_owned()).unwrap_or_default(),
+                warning: warning.map(|c| c.to_owned()).unwrap_or_default(),
             });
         }
 
@@ -262,8 +262,8 @@ mod test {
         assert_eq!(credman.added_entries.len(), 1);
         let entry = &credman.added_entries[0];
         assert_eq!(entry.entry_id, c"C");
-        assert_eq!(entry.title.as_ref().unwrap(), c"TTTT");
-        assert_eq!(entry.subtitle.as_ref().unwrap(), c"SSSSS");
+        assert_eq!(entry.title, c"TTTT");
+        assert_eq!(entry.subtitle, c"SSSSS");
         assert!(entry.icon.is_empty());
     }
 

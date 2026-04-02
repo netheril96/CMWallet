@@ -21,14 +21,14 @@ pub struct DcqlCredential {
 #[derive(DeJson, Debug, Clone, Default)]
 #[nserde(default)]
 pub struct DcqlMeta {
-    pub doctype_value: Option<String>,
+    pub doctype_value: String,
     pub vct_values: Vec<String>,
 }
 
 #[derive(DeJson, Debug, Clone, Default)]
 #[nserde(default)]
 pub struct DcqlClaim {
-    pub id: Option<String>,
+    pub id: String,
     pub path: Vec<String>,
     pub values: Vec<JsonValue>,
 }
@@ -74,10 +74,10 @@ pub struct RegistryDisplay {
 #[nserde(default)]
 pub struct RegistryVerification {
     pub title: String,
-    pub subtitle: Option<String>,
-    pub explainer: Option<String>,
-    pub warning: Option<String>,
-    pub metadata_display_text: Option<String>,
+    pub subtitle: String,
+    pub explainer: String,
+    pub warning: String,
+    pub metadata_display_text: String,
     pub icon: Option<RegistryIcon>,
 }
 
@@ -101,8 +101,8 @@ pub struct RegistryIssuance {
 #[nserde(default)]
 pub struct RegistryIssuanceEntry {
     pub id: String,
-    pub title: Option<String>,
-    pub subtitle: Option<String>,
+    pub title: String,
+    pub subtitle: String,
     pub icon: Option<RegistryIcon>,
     pub supported: Vec<String>,
 }
@@ -166,7 +166,7 @@ pub struct OpenId4VpData {
     pub dcql_query: Option<DcqlQuery>,
     pub offer: Option<JsonValue>,
     pub transaction_data: Vec<String>,
-    pub request: Option<String>,
+    pub request: String,
 }
 
 #[derive(Debug, Clone)]
@@ -200,7 +200,7 @@ impl DeJson for ProtocolRequestData {
 pub struct ProtocolRequest {
     pub protocol: String,
     pub data: Option<ProtocolRequestData>,
-    pub request: Option<String>, // Legacy
+    pub request: String, // Legacy
 }
 
 #[derive(DeJson, Debug, Clone, Default)]
@@ -208,14 +208,14 @@ pub struct ProtocolRequest {
 pub struct TransactionData {
     pub credential_ids: Vec<String>,
     #[nserde(rename = "type")]
-    pub transaction_type: Option<String>,
+    pub transaction_type: String,
     pub payload: Option<TransactionPayload>,
-    pub payee_name: Option<String>,
-    pub payment_amount: Option<String>,
-    pub payment_currency: Option<String>,
-    pub merchant_name: Option<String>,
-    pub amount: Option<String>,
-    pub additional_info: Option<String>,
+    pub payee_name: String,
+    pub payment_amount: String,
+    pub payment_currency: String,
+    pub merchant_name: String,
+    pub amount: String,
+    pub additional_info: String,
 }
 
 #[derive(DeJson, Debug, Clone, Default)]
@@ -223,14 +223,14 @@ pub struct TransactionData {
 pub struct TransactionPayload {
     pub payee: Option<Payee>,
     pub amount: Option<f64>,
-    pub amount_display: Option<String>,
-    pub currency: Option<String>,
+    pub amount_display: String,
+    pub currency: String,
 }
 
 #[derive(DeJson, Debug, Clone, Default)]
 #[nserde(default)]
 pub struct Payee {
-    pub name: Option<String>,
+    pub name: String,
 }
 
 #[derive(DeJson, SerJson, Debug, Clone, Default)]
@@ -239,6 +239,6 @@ pub struct Metadata {
     pub claims: Vec<Vec<String>>,
     pub dc_request_index: usize,
     pub dcql_cred_id: String,
-    pub dcql_credential_set_index: Option<String>,
-    pub dcql_option_index: Option<String>,
+    pub dcql_credential_set_index: String,
+    pub dcql_option_index: String,
 }

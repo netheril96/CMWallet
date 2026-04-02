@@ -71,23 +71,26 @@ fn filter_candidates_by_meta<'a>(
     let filtered_candidates = if let Some(meta) = meta {
         match format {
             "mso_mdoc" => {
-                if let Some(doctype) = &meta.doctype_value {
-                    log::trace!("Filtering mso_mdoc candidates by doctype: {}", doctype);
+                if !meta.doctype_value.is_empty() {
+                    log::trace!(
+                        "Filtering mso_mdoc candidates by doctype: {}",
+                        meta.doctype_value
+                    );
                     inline_issuance = inline_issuance_candidates.and_then(|cands| {
                         cands
                             .iter()
-                            .find(|cand| cand.supported.contains(doctype))
+                            .find(|cand| cand.supported.contains(&meta.doctype_value))
                             .map(|cand| {
                                 log::debug!(
                                     "Found matching inline issuance for doctype {}: {}",
-                                    doctype,
+                                    meta.doctype_value,
                                     cand.id
                                 );
                                 cand.clone()
                             })
                     });
                     candidates
-                        .and_then(|c| c.get(doctype))
+                        .and_then(|c| c.get(&meta.doctype_value))
                         .map(|v| v.iter().collect())
                         .unwrap_or_default()
                 } else {
@@ -164,12 +167,11 @@ fn match_candidate_claims(
         log::trace!("Candidate {}: matching against claim_sets", candidate.id);
         let matched_claim_ids: DeterministicMap<String, MatchedClaim> = claims_req
             .iter()
+            .filter(|claim| !claim.id.is_empty())
             .filter_map(|claim| {
-                claim.id.as_ref().and_then(|claim_id| {
-                    match_claim(claim, &candidate.paths).map(|info| {
-                        log::trace!("Candidate {}: claim {} matched", candidate.id, claim_id);
-                        (claim_id.clone(), info)
-                    })
+                match_claim(claim, &candidate.paths).map(|info| {
+                    log::trace!("Candidate {}: claim {} matched", candidate.id, claim.id);
+                    (claim.id.clone(), info)
                 })
             })
             .collect();

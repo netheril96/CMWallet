@@ -1,7 +1,7 @@
 use crate::credman::CredmanApi;
 use crate::json_value::{DeterministicMap, JsonValue};
 pub use crate::openid4vp_models::*;
-use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use nanoserde::DeJson;
 use std::borrow::Cow;
 use std::ffi::{CStr, CString};
@@ -18,13 +18,16 @@ fn parse_protocol_request_data<'a>(
         let jws: &'a str = if let Some(data) = &pr.data {
             match data {
                 ProtocolRequestData::String(s) => s,
-                ProtocolRequestData::Object(obj) => obj
-                    .request
-                    .as_deref()
-                    .ok_or("Missing 'request' field in signed data object")?,
+                ProtocolRequestData::Object(obj) => {
+                    if !obj.request.is_empty() {
+                        &obj.request
+                    } else {
+                        return Err("Missing 'request' field in signed data object".into());
+                    }
+                }
             }
-        } else if let Some(req_str) = &pr.request {
-            req_str
+        } else if !pr.request.is_empty() {
+            &pr.request
         } else {
             return Err("Missing signed request data".into());
         };
@@ -32,9 +35,9 @@ fn parse_protocol_request_data<'a>(
         let parts: Vec<&str> = jws.split('.').collect();
         if parts.len() >= 2 {
             let decoded = decode_base64url(parts[1])?;
-            Ok(Cow::Owned(DeJson::deserialize_json(std::str::from_utf8(
-                &decoded,
-            )?)?))
+            Ok(Cow::Owned(DeJson::deserialize_json(
+                std::str::from_utf8(&decoded)?,
+            )?))
         } else {
             log::error!("Invalid JWS parts");
             Err("Invalid JWS".into())
@@ -46,8 +49,8 @@ fn parse_protocol_request_data<'a>(
                 ProtocolRequestData::Object(obj) => Ok(Cow::Borrowed(obj)),
                 ProtocolRequestData::String(s) => Ok(Cow::Owned(DeJson::deserialize_json(s)?)),
             }
-        } else if let Some(req_str) = &pr.request {
-            Ok(Cow::Owned(DeJson::deserialize_json(req_str)?))
+        } else if !pr.request.is_empty() {
+            Ok(Cow::Owned(DeJson::deserialize_json(&pr.request)?))
         } else {
             Err("Missing unsigned request data".into())
         }
@@ -173,24 +176,23 @@ fn report_payment_transaction_entry(
     metadata_cstr: &CStr,
     merchant: &str,
     amount: &str,
-    additional: &Option<String>,
+    additional: &str,
     creds_blob: &[u8],
 ) -> Result<(), Box<dyn std::error::Error>> {
     log::info!("Reporting as payment entry: {}", c.id);
     let title = CString::new(c.display.verification.title.clone())?;
-    let subtitle = c
-        .display
-        .verification
-        .subtitle
-        .as_ref()
-        .map(|s| CString::new(s.clone()))
-        .transpose()?;
+    let subtitle = if !c.display.verification.subtitle.is_empty() {
+        Some(CString::new(c.display.verification.subtitle.clone())?)
+    } else {
+        None
+    };
     let merchant_cstr = CString::new(merchant.to_string())?;
     let amount_cstr = CString::new(amount.to_string())?;
-    let additional_cstr = additional
-        .as_ref()
-        .map(|s| CString::new(s.clone()))
-        .transpose()?;
+    let additional_cstr = if !additional.is_empty() {
+        Some(CString::new(additional.to_string())?)
+    } else {
+        None
+    };
     let cred_id_cstr = CString::new(c.id.clone())?;
 
     let icon_bytes = c
@@ -228,20 +230,16 @@ fn report_standard_verification_entry(
 ) -> Result<(), Box<dyn std::error::Error>> {
     log::info!("Reporting as standard entry: {}", c.id);
     let title = CString::new(c.display.verification.title.clone())?;
-    let subtitle = c
-        .display
-        .verification
-        .subtitle
-        .as_ref()
-        .map(|s| CString::new(s.clone()))
-        .transpose()?;
-    let explainer = c
-        .display
-        .verification
-        .explainer
-        .as_ref()
-        .map(|s| CString::new(s.clone()))
-        .transpose()?;
+    let subtitle = if !c.display.verification.subtitle.is_empty() {
+        Some(CString::new(c.display.verification.subtitle.clone())?)
+    } else {
+        None
+    };
+    let explainer = if !c.display.verification.explainer.is_empty() {
+        Some(CString::new(c.display.verification.explainer.clone())?)
+    } else {
+        None
+    };
     let cred_id_cstr = CString::new(c.id.clone())?;
     let icon_bytes = c
         .display
@@ -272,7 +270,13 @@ fn report_standard_verification_entry(
             if let Some(JsonValue::Object(v)) = obj.get("verification") {
                 if let Some(JsonValue::String(display_name)) = v.get("display") {
                     let display_value = match v.get("display_value") {
-                        Some(JsonValue::String(s)) => Some(CString::new(s.clone())?),
+                        Some(JsonValue::String(s)) => {
+                            if !s.is_empty() {
+                                Some(CString::new(s.clone())?)
+                            } else {
+                                None
+                            }
+                        }
                         _ => None,
                     };
                     let name_cstr = CString::new(display_name.clone())?;
@@ -289,9 +293,13 @@ fn report_standard_verification_entry(
     }
 
     if wasm_version >= 5 {
-        if let Some(meta_text) = &c.display.verification.metadata_display_text {
-            let meta_text_cstr = CString::new(meta_text.clone())?;
-            log::trace!("Adding metadata display text: {}", meta_text);
+        if !c.display.verification.metadata_display_text.is_empty() {
+            let meta_text_cstr =
+                CString::new(c.display.verification.metadata_display_text.clone())?;
+            log::trace!(
+                "Adding metadata display text: {}",
+                c.display.verification.metadata_display_text
+            );
             credman.add_metadata_display_text_to_entry_set(
                 &cred_id_cstr,
                 &meta_text_cstr,
@@ -314,7 +322,7 @@ fn report_matched_credential(
     dcql_set_idx: Option<&str>,
     dcql_option_idx: Option<&str>,
     creds_blob: &[u8],
-    transaction_info: &Option<(Vec<String>, String, String, Option<String>)>,
+    transaction_info: &Option<(Vec<String>, String, String, String)>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     log::debug!(
         "Reporting matched credential: id={}, dcql_id={}, doc_idx={}",
@@ -327,8 +335,8 @@ fn report_matched_credential(
             claims: c.matched_claim_metadata.clone(),
             dc_request_index: request_id,
             dcql_cred_id: matched_credential_id.to_string(),
-            dcql_credential_set_index: dcql_set_idx.map(|s| s.to_string()),
-            dcql_option_index: dcql_option_idx.map(|s| s.to_string()),
+            dcql_credential_set_index: dcql_set_idx.unwrap_or("").to_string(),
+            dcql_option_index: dcql_option_idx.unwrap_or("").to_string(),
         };
         let metadata_str = nanoserde::SerJson::serialize_json(&metadata);
         let metadata_cstr = CString::new(metadata_str)?;
@@ -376,7 +384,7 @@ fn report_matched_credential_set(
     matched_docs: &DeterministicMap<String, DcqlMatchedCredentialEntry>,
     request_id: usize,
     creds_blob: &[u8],
-    transaction_info: &Option<(Vec<String>, String, String, Option<String>)>,
+    transaction_info: &Option<(Vec<String>, String, String, String)>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     if curr_set_idx < matched_credential_sets.len() {
         let options = &matched_credential_sets[curr_set_idx];
@@ -419,41 +427,61 @@ fn report_matched_credential_set(
 
 fn extract_transaction_info(
     data_json: &OpenId4VpData,
-) -> Result<Option<(Vec<String>, String, String, Option<String>)>, Box<dyn std::error::Error>> {
+) -> Result<Option<(Vec<String>, String, String, String)>, Box<dyn std::error::Error>> {
     if !data_json.transaction_data.is_empty() {
         if data_json.transaction_data.len() == 1 {
             log::debug!("Decoding transaction data");
             let decoded = decode_base64url(&data_json.transaction_data[0])?;
             let td: TransactionData = DeJson::deserialize_json(std::str::from_utf8(&decoded)?)?;
 
-            let mut merchant_name = td.merchant_name.clone().unwrap_or_default();
-            let mut transaction_amount = td.amount.clone().unwrap_or_default();
+            let merchant_name = td.merchant_name.clone();
+            let mut transaction_amount = td.amount.clone();
             let additional_info = td.additional_info.clone();
 
-            if let Some(t_type) = &td.transaction_type {
-                log::trace!("Transaction type: {}", t_type);
-                if t_type == "urn:eudi:sca:payment:1" {
+            if !td.transaction_type.is_empty() {
+                log::trace!("Transaction type: {}", td.transaction_type);
+                if td.transaction_type == "urn:eudi:sca:payment:1" {
                     if let Some(payload) = &td.payload {
-                        merchant_name = payload
-                            .payee
-                            .as_ref()
-                            .and_then(|p| p.name.clone())
-                            .unwrap_or_default();
-                        transaction_amount = payload.amount_display.clone().unwrap_or_else(|| {
-                            if let Some(curr) = &payload.currency {
-                                format!("{} {:.2}", curr, payload.amount.unwrap_or(0.0))
+                        let merchant_name = payload.payee.as_ref().map(|p| p.name.clone()).unwrap_or_default();
+                        transaction_amount = if !payload.amount_display.is_empty() {
+                            payload.amount_display.clone()
+                        } else {
+                            if !payload.currency.is_empty() {
+                                format!("{} {:.2}", payload.currency, payload.amount.unwrap_or(0.0))
                             } else {
                                 format!("{:.2}", payload.amount.unwrap_or(0.0))
                             }
-                        });
+                        };
+                        log::info!(
+                            "Found transaction data (sca): merchant={}, amount={}",
+                            merchant_name,
+                            transaction_amount
+                        );
+                        return Ok(Some((
+                            td.credential_ids,
+                            merchant_name,
+                            transaction_amount,
+                            additional_info,
+                        )));
                     }
-                } else if t_type == "payment_details" {
-                    merchant_name = td.payee_name.clone().unwrap_or_default();
+                } else if td.transaction_type == "payment_details" {
+                    let merchant_name = td.payee_name.clone();
                     transaction_amount = format!(
                         "{} {}",
-                        td.payment_currency.as_deref().unwrap_or(""),
-                        td.payment_amount.as_deref().unwrap_or("")
+                        td.payment_currency,
+                        td.payment_amount
                     );
+                    log::info!(
+                        "Found transaction data (details): merchant={}, amount={}",
+                        merchant_name,
+                        transaction_amount
+                    );
+                    return Ok(Some((
+                        td.credential_ids,
+                        merchant_name,
+                        transaction_amount,
+                        additional_info,
+                    )));
                 }
             }
             log::info!(
@@ -559,16 +587,16 @@ fn report_match_result(
     if let Some(inline) = &res.inline_issuance {
         log::info!("Reporting inline issuance entry: {}", inline.id);
         let cred_id_cstr = CString::new(inline.id.clone())?;
-        let title_cstr = inline
-            .title
-            .as_ref()
-            .map(|s| CString::new(s.clone()))
-            .transpose()?;
-        let subtitle_cstr = inline
-            .subtitle
-            .as_ref()
-            .map(|s| CString::new(s.clone()))
-            .transpose()?;
+        let title_cstr = if !inline.title.is_empty() {
+            Some(CString::new(inline.title.clone())?)
+        } else {
+            None
+        };
+        let subtitle_cstr = if !inline.subtitle.is_empty() {
+            Some(CString::new(inline.subtitle.clone())?)
+        } else {
+            None
+        };
         let icon_bytes = inline
             .icon
             .as_ref()
@@ -635,6 +663,14 @@ mod test {
         set_length: i32,
         #[nserde(default)]
         entries: DeterministicMap<String, DeterministicMap<String, FakeEntry>>,
+    }
+
+    #[derive(SerJson, DeJson, PartialEq, Debug)]
+    struct FakeCredmanResult {
+        #[nserde(rename = "entrySets")]
+        entry_sets: DeterministicMap<String, FakeEntrySet>,
+        #[nserde(rename = "standaloneEntries")]
+        standalone_entries: Vec<FakeEntry>,
     }
 
     struct FakeCredman {
@@ -845,14 +881,6 @@ mod test {
                 .unwrap()
                 .metadata_display_text = metadata_display_text.to_str().unwrap().to_string();
         }
-    }
-
-    #[derive(SerJson, DeJson, PartialEq, Debug)]
-    struct FakeCredmanResult {
-        #[nserde(rename = "entrySets")]
-        entry_sets: DeterministicMap<String, FakeEntrySet>,
-        #[nserde(rename = "standaloneEntries")]
-        standalone_entries: Vec<FakeEntry>,
     }
 
     fn create_registry_blob(json_str: &str) -> Vec<u8> {

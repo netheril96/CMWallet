@@ -155,7 +155,7 @@ impl OpenId4VciFilter {
 pub struct IssuanceMatcherData {
     pub entry_id: String,
     pub icon: (usize, usize),
-    pub title: Option<String>,
-    pub subtitle: Option<String>,
+    pub title: String,
+    pub subtitle: String,
     pub filter: OpenId4VciFilter,
 }
