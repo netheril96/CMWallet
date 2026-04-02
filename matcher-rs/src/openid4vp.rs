@@ -4,7 +4,6 @@ pub use crate::openid4vp_models::*;
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use nanoserde::DeJson;
 use std::borrow::Cow;
-use std::ffi::{CStr, CString};
 
 pub fn decode_base64url(input: &str) -> Result<Vec<u8>, base64::DecodeError> {
     URL_SAFE_NO_PAD.decode(input.trim_end_matches('='))
@@ -128,7 +127,7 @@ pub fn openid4vp_main(credman: &mut impl CredmanApi) -> Result<(), Box<dyn std::
 
 fn report_credential_set_length(
     credman: &mut impl CredmanApi,
-    set_id: &CStr,
+    set_id: &str,
     curr_length: usize,
     curr_set_idx: usize,
     matched_credential_sets: &[Vec<MatchedCredentialSetInfo>],
@@ -154,47 +153,33 @@ fn report_payment_transaction_entry(
     credman: &mut impl CredmanApi,
     c: &MatchedCredential,
     doc_idx: i32,
-    set_id: &CStr,
-    metadata_cstr: &CStr,
+    set_id: &str,
+    metadata_str: &str,
     merchant: &str,
     amount: &str,
     additional: &str,
     creds_blob: &[u8],
 ) -> Result<(), Box<dyn std::error::Error>> {
     log::info!("Reporting as payment entry: {}", c.id);
-    let title = CString::new(c.display.verification.title.clone())?;
-    let subtitle = if !c.display.verification.subtitle.is_empty() {
-        Some(CString::new(c.display.verification.subtitle.clone())?)
-    } else {
-        None
-    };
-    let merchant_cstr = CString::new(merchant.to_string())?;
-    let amount_cstr = CString::new(amount.to_string())?;
-    let additional_cstr = if !additional.is_empty() {
-        Some(CString::new(additional.to_string())?)
-    } else {
-        None
-    };
-    let cred_id_cstr = CString::new(c.id.clone())?;
 
     let icon_bytes = c
         .display
         .verification
         .icon
         .as_ref()
-        .map(|i| &creds_blob[i.start..i.start + i.length]);
+        .map_or(&[][..], |i| &creds_blob[i.start..i.start + i.length]);
 
     credman.add_payment_entry_to_set_v2(
-        &cred_id_cstr,
-        Some(&merchant_cstr),
-        Some(&title),
-        subtitle.as_deref(),
+        &c.id,
+        merchant,
+        &c.display.verification.title,
+        &c.display.verification.subtitle,
         icon_bytes,
-        Some(&amount_cstr),
-        None,
-        None,
-        additional_cstr.as_deref(),
-        Some(metadata_cstr),
+        amount,
+        &[],
+        &[],
+        additional,
+        metadata_str,
         set_id,
         doc_idx,
     );
@@ -206,38 +191,27 @@ fn report_standard_verification_entry(
     wasm_version: u32,
     c: &MatchedCredential,
     doc_idx: i32,
-    set_id: &CStr,
-    metadata_cstr: &CStr,
+    set_id: &str,
+    metadata_str: &str,
     creds_blob: &[u8],
 ) -> Result<(), Box<dyn std::error::Error>> {
     log::info!("Reporting as standard entry: {}", c.id);
-    let title = CString::new(c.display.verification.title.clone())?;
-    let subtitle = if !c.display.verification.subtitle.is_empty() {
-        Some(CString::new(c.display.verification.subtitle.clone())?)
-    } else {
-        None
-    };
-    let explainer = if !c.display.verification.explainer.is_empty() {
-        Some(CString::new(c.display.verification.explainer.clone())?)
-    } else {
-        None
-    };
-    let cred_id_cstr = CString::new(c.id.clone())?;
+
     let icon_bytes = c
         .display
         .verification
         .icon
         .as_ref()
-        .map(|i| &creds_blob[i.start..i.start + i.length]);
+        .map_or(&[][..], |i| &creds_blob[i.start..i.start + i.length]);
 
     credman.add_entry_to_set(
-        &cred_id_cstr,
+        &c.id,
         icon_bytes,
-        Some(&title),
-        subtitle.as_deref(),
-        explainer.as_deref(),
-        None,
-        Some(metadata_cstr),
+        &c.display.verification.title,
+        &c.display.verification.subtitle,
+        &c.display.verification.explainer,
+        "",
+        metadata_str,
         set_id,
         doc_idx,
     );
@@ -261,29 +235,27 @@ fn report_standard_verification_entry(
         };
 
         let display_value = match v.get("display_value") {
-            Some(JsonValue::String(s)) if !s.is_empty() => Some(CString::new(s.clone())?),
-            _ => None,
+            Some(JsonValue::String(s)) => s,
+            _ => "",
         };
 
-        let name_cstr = CString::new(display_name.clone())?;
         credman.add_field_to_entry_set(
-            &cred_id_cstr,
-            &name_cstr,
-            display_value.as_deref(),
+            &c.id,
+            display_name,
+            display_value,
             set_id,
             doc_idx,
         );
     }
 
     if wasm_version >= 5 && !c.display.verification.metadata_display_text.is_empty() {
-        let meta_text_cstr = CString::new(c.display.verification.metadata_display_text.clone())?;
         log::trace!(
             "Adding metadata display text: {}",
             c.display.verification.metadata_display_text
         );
         credman.add_metadata_display_text_to_entry_set(
-            &cred_id_cstr,
-            &meta_text_cstr,
+            &c.id,
+            &c.display.verification.metadata_display_text,
             set_id,
             doc_idx,
         );
@@ -298,7 +270,7 @@ fn report_matched_credential(
     matched_credential_id: &str,
     doc_idx: i32,
     request_id: usize,
-    set_id: &CStr,
+    set_id: &str,
     dcql_set_idx: Option<&str>,
     dcql_option_idx: Option<&str>,
     creds_blob: &[u8],
@@ -319,7 +291,6 @@ fn report_matched_credential(
             dcql_option_index: dcql_option_idx.unwrap_or("").to_string(),
         };
         let metadata_str = nanoserde::SerJson::serialize_json(&metadata);
-        let metadata_cstr = CString::new(metadata_str)?;
 
         let mut reported = false;
         if let Some((td_ids, merchant, amount, additional)) = transaction_info {
@@ -329,7 +300,7 @@ fn report_matched_credential(
                     c,
                     doc_idx,
                     set_id,
-                    &metadata_cstr,
+                    &metadata_str,
                     merchant,
                     amount,
                     additional,
@@ -346,7 +317,7 @@ fn report_matched_credential(
                 c,
                 doc_idx,
                 set_id,
-                &metadata_cstr,
+                &metadata_str,
                 creds_blob,
             )?;
         }
@@ -356,7 +327,7 @@ fn report_matched_credential(
 
 fn report_matched_credential_set(
     credman: &mut impl CredmanApi,
-    set_id: &CStr,
+    set_id: &str,
     curr_set_idx: usize,
     matched_credential_sets: &[Vec<MatchedCredentialSetInfo>],
     curr_doc_idx: &mut i32,
@@ -462,7 +433,7 @@ fn extract_transaction_info(
                 merchant_name,
                 transaction_amount,
                 td.additional_info.clone(),
-            )));
+                )));
         }
     }
 
@@ -505,14 +476,13 @@ fn report_match_result(
             } else {
                 format!("req:{};null", request_idx)
             };
-            let set_id_cstr = CString::new(set_id_str.clone())?;
             log::debug!("Set ID: {}", set_id_str);
 
             if wasm_version > 1 {
                 log::trace!("Reporting credential set lengths for {}", set_id_str);
                 report_credential_set_length(
                     credman,
-                    &set_id_cstr,
+                    &set_id_str,
                     opt.matched_credential_ids.len(),
                     1,
                     &res.matched_credential_sets,
@@ -532,7 +502,7 @@ fn report_match_result(
                     cred_id,
                     doc_idx,
                     request_idx,
-                    &set_id_cstr,
+                    &set_id_str,
                     if opt.set_id.is_empty() {
                         None
                     } else {
@@ -552,7 +522,7 @@ fn report_match_result(
             let mut next_doc_idx = doc_idx;
             report_matched_credential_set(
                 credman,
-                &set_id_cstr,
+                &set_id_str,
                 1,
                 &res.matched_credential_sets,
                 &mut next_doc_idx,
@@ -567,27 +537,16 @@ fn report_match_result(
 
     if let Some(inline) = &res.inline_issuance {
         log::info!("Reporting inline issuance entry: {}", inline.id);
-        let cred_id_cstr = CString::new(inline.id.clone())?;
-        let title_cstr = if !inline.title.is_empty() {
-            Some(CString::new(inline.title.clone())?)
-        } else {
-            None
-        };
-        let subtitle_cstr = if !inline.subtitle.is_empty() {
-            Some(CString::new(inline.subtitle.clone())?)
-        } else {
-            None
-        };
         let icon_bytes = inline
             .icon
             .as_ref()
-            .map(|i| &creds_blob[i.start..i.start + i.length]);
+            .map_or(&[][..], |i| &creds_blob[i.start..i.start + i.length]);
 
         credman.add_inline_issuance_entry(
-            &cred_id_cstr,
+            &inline.id,
             icon_bytes,
-            title_cstr.as_deref(),
-            subtitle_cstr.as_deref(),
+            &inline.title,
+            &inline.subtitle,
         );
     }
 
@@ -598,7 +557,6 @@ fn report_match_result(
 mod test {
     use super::*;
     use nanoserde::{DeJson, SerJson};
-    use std::ffi::CStr;
 
     #[derive(SerJson, DeJson, PartialEq, Debug, Clone, Default)]
     enum EntryType {
@@ -686,16 +644,16 @@ mod test {
         }
         fn add_string_id_entry(
             &mut self,
-            _id: &CStr,
-            _icon: Option<&[u8]>,
-            _title: Option<&CStr>,
-            _subtitle: Option<&CStr>,
-            _disclaimer: Option<&CStr>,
-            _warning: Option<&CStr>,
+            _id: &str,
+            _icon: &[u8],
+            _title: &str,
+            _subtitle: &str,
+            _disclaimer: &str,
+            _warning: &str,
         ) {
         }
-        fn add_entry_set(&mut self, set_id: &CStr, set_length: i32) {
-            let s_id = set_id.to_str().unwrap().to_string();
+        fn add_entry_set(&mut self, set_id: &str, set_length: i32) {
+            let s_id = set_id.to_string();
             self.entry_sets.insert(
                 s_id.clone(),
                 FakeEntrySet {
@@ -707,33 +665,25 @@ mod test {
         }
         fn add_entry_to_set(
             &mut self,
-            cred_id: &CStr,
-            _icon: Option<&[u8]>,
-            title: Option<&CStr>,
-            subtitle: Option<&CStr>,
-            disclaimer: Option<&CStr>,
-            warning: Option<&CStr>,
-            _metadata: Option<&CStr>,
-            set_id: &CStr,
+            cred_id: &str,
+            _icon: &[u8],
+            title: &str,
+            subtitle: &str,
+            disclaimer: &str,
+            warning: &str,
+            _metadata: &str,
+            set_id: &str,
             set_index: i32,
         ) {
-            let s_id = set_id.to_str().unwrap().to_string();
-            let c_id = cred_id.to_str().unwrap().to_string();
+            let s_id = set_id.to_string();
+            let c_id = cred_id.to_string();
             let entry = FakeEntry {
                 cred_id: c_id.clone(),
                 entry_type: EntryType::Verification,
-                title: title
-                    .map(|s| s.to_str().unwrap().to_string())
-                    .unwrap_or_default(),
-                subtitle: subtitle
-                    .map(|s| s.to_str().unwrap().to_string())
-                    .unwrap_or_default(),
-                disclaimer: disclaimer
-                    .map(|s| s.to_str().unwrap().to_string())
-                    .unwrap_or_default(),
-                warning: warning
-                    .map(|s| s.to_str().unwrap().to_string())
-                    .unwrap_or_default(),
+                title: title.to_string(),
+                subtitle: subtitle.to_string(),
+                disclaimer: disclaimer.to_string(),
+                warning: warning.to_string(),
                 metadata_display_text: String::new(),
                 fields: Vec::new(),
                 merchant_name: String::new(),
@@ -750,18 +700,16 @@ mod test {
         }
         fn add_field_to_entry_set(
             &mut self,
-            cred_id: &CStr,
-            field_display_name: &CStr,
-            field_display_value: Option<&CStr>,
-            set_id: &CStr,
+            cred_id: &str,
+            field_display_name: &str,
+            field_display_value: &str,
+            set_id: &str,
             set_index: i32,
         ) {
-            let s_id = set_id.to_str().unwrap().to_string();
-            let c_id = cred_id.to_str().unwrap().to_string();
-            let f_name = field_display_name.to_str().unwrap().to_string();
-            let f_val = field_display_value
-                .map(|s| s.to_str().unwrap().to_string())
-                .unwrap_or_default();
+            let s_id = set_id.to_string();
+            let c_id = cred_id.to_string();
+            let f_name = field_display_name.to_string();
+            let f_val = field_display_value.to_string();
             self.entry_sets
                 .get_mut(&s_id)
                 .unwrap()
@@ -775,21 +723,21 @@ mod test {
         }
         fn add_payment_entry_to_set_v2(
             &mut self,
-            cred_id: &CStr,
-            merchant_name: Option<&CStr>,
-            _method_name: Option<&CStr>,
-            _method_subtitle: Option<&CStr>,
-            _icon: Option<&[u8]>,
-            transaction_amount: Option<&CStr>,
-            _bank_icon: Option<&[u8]>,
-            _provider_icon: Option<&[u8]>,
-            additional_info: Option<&CStr>,
-            _metadata: Option<&CStr>,
-            set_id: &CStr,
+            cred_id: &str,
+            merchant_name: &str,
+            _method_name: &str,
+            _method_subtitle: &str,
+            _icon: &[u8],
+            transaction_amount: &str,
+            _bank_icon: &[u8],
+            _provider_icon: &[u8],
+            additional_info: &str,
+            _metadata: &str,
+            set_id: &str,
             set_index: i32,
         ) {
-            let s_id = set_id.to_str().unwrap().to_string();
-            let c_id = cred_id.to_str().unwrap().to_string();
+            let s_id = set_id.to_string();
+            let c_id = cred_id.to_string();
             let entry = FakeEntry {
                 cred_id: c_id.clone(),
                 entry_type: EntryType::Payment,
@@ -799,15 +747,9 @@ mod test {
                 warning: String::new(),
                 metadata_display_text: String::new(),
                 fields: Vec::new(),
-                merchant_name: merchant_name
-                    .map(|s| s.to_str().unwrap().to_string())
-                    .unwrap_or_default(),
-                transaction_amount: transaction_amount
-                    .map(|s| s.to_str().unwrap().to_string())
-                    .unwrap_or_default(),
-                additional_info: additional_info
-                    .map(|s| s.to_str().unwrap().to_string())
-                    .unwrap_or_default(),
+                merchant_name: merchant_name.to_string(),
+                transaction_amount: transaction_amount.to_string(),
+                additional_info: additional_info.to_string(),
             };
             self.entry_sets
                 .get_mut(&s_id)
@@ -819,20 +761,16 @@ mod test {
         }
         fn add_inline_issuance_entry(
             &mut self,
-            cred_id: &CStr,
-            _icon: Option<&[u8]>,
-            title: Option<&CStr>,
-            subtitle: Option<&CStr>,
+            cred_id: &str,
+            _icon: &[u8],
+            title: &str,
+            subtitle: &str,
         ) {
             let entry = FakeEntry {
-                cred_id: cred_id.to_str().unwrap().to_string(),
+                cred_id: cred_id.to_string(),
                 entry_type: EntryType::InlineIssuance,
-                title: title
-                    .map(|s| s.to_str().unwrap().to_string())
-                    .unwrap_or_default(),
-                subtitle: subtitle
-                    .map(|s| s.to_str().unwrap().to_string())
-                    .unwrap_or_default(),
+                title: title.to_string(),
+                subtitle: subtitle.to_string(),
                 disclaimer: String::new(),
                 warning: String::new(),
                 metadata_display_text: String::new(),
@@ -845,13 +783,13 @@ mod test {
         }
         fn add_metadata_display_text_to_entry_set(
             &mut self,
-            cred_id: &CStr,
-            metadata_display_text: &CStr,
-            set_id: &CStr,
+            cred_id: &str,
+            metadata_display_text: &str,
+            set_id: &str,
             set_index: i32,
         ) {
-            let s_id = set_id.to_str().unwrap().to_string();
-            let c_id = cred_id.to_str().unwrap().to_string();
+            let s_id = set_id.to_string();
+            let c_id = cred_id.to_string();
             self.entry_sets
                 .get_mut(&s_id)
                 .unwrap()
@@ -860,7 +798,7 @@ mod test {
                 .unwrap()
                 .get_mut(&c_id)
                 .unwrap()
-                .metadata_display_text = metadata_display_text.to_str().unwrap().to_string();
+                .metadata_display_text = metadata_display_text.to_string();
         }
     }
 

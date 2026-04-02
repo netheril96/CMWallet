@@ -1,5 +1,3 @@
-use std::ffi::CString;
-
 use crate::{
     credman::CredmanApi,
     issuance_matcher::IssuanceMatcherData,
@@ -70,26 +68,15 @@ pub fn issuance_main(credman: &mut impl CredmanApi) -> Result<(), Box<dyn std::e
 
         log::info!("Match found for request {} with protocol {}", i, r.protocol);
         let icon = &matcher_data_buffer[matcher_data.icon.0..matcher_data.icon.1];
-        let entry_id = CString::new(matcher_data.entry_id.clone())?;
-        let title = if !matcher_data.title.is_empty() {
-            Some(CString::new(matcher_data.title.clone())?)
-        } else {
-            None
-        };
-        let subtitle = if !matcher_data.subtitle.is_empty() {
-            Some(CString::new(matcher_data.subtitle.clone())?)
-        } else {
-            None
-        };
 
         log::debug!("Adding string ID entry: {}", matcher_data.entry_id);
         credman.add_string_id_entry(
-            &entry_id,
-            if icon.is_empty() { None } else { Some(icon) },
-            title.as_deref(),
-            subtitle.as_deref(),
-            None,
-            None,
+            &matcher_data.entry_id,
+            icon,
+            &matcher_data.title,
+            &matcher_data.subtitle,
+            "",
+            "",
         );
         // Assuming we only need to add one entry if any request matches
         break;
@@ -102,15 +89,14 @@ pub fn issuance_main(credman: &mut impl CredmanApi) -> Result<(), Box<dyn std::e
 #[cfg(test)]
 mod test {
     use super::*;
-    use std::ffi::{CStr, CString};
 
     struct AddedEntry {
-        entry_id: CString,
+        entry_id: String,
         icon: Vec<u8>,
-        title: CString,
-        subtitle: CString,
-        disclaimer: CString,
-        warning: CString,
+        title: String,
+        subtitle: String,
+        disclaimer: String,
+        warning: String,
     }
 
     struct FakeCredman {
@@ -139,75 +125,75 @@ mod test {
 
         fn add_string_id_entry(
             &mut self,
-            entry_id: &CStr,
-            icon: Option<&[u8]>,
-            title: Option<&CStr>,
-            subtitle: Option<&CStr>,
-            disclaimer: Option<&CStr>,
-            warning: Option<&CStr>,
+            entry_id: &str,
+            icon: &[u8],
+            title: &str,
+            subtitle: &str,
+            disclaimer: &str,
+            warning: &str,
         ) {
             self.added_entries.push(AddedEntry {
-                entry_id: entry_id.to_owned(),
-                icon: icon.map(|i| i.to_vec()).unwrap_or_default(),
-                title: title.map(|c| c.to_owned()).unwrap_or_default(),
-                subtitle: subtitle.map(|c| c.to_owned()).unwrap_or_default(),
-                disclaimer: disclaimer.map(|c| c.to_owned()).unwrap_or_default(),
-                warning: warning.map(|c| c.to_owned()).unwrap_or_default(),
+                entry_id: entry_id.to_string(),
+                icon: icon.to_vec(),
+                title: title.to_string(),
+                subtitle: subtitle.to_string(),
+                disclaimer: disclaimer.to_string(),
+                warning: warning.to_string(),
             });
         }
 
-        fn add_entry_set(&mut self, _set_id: &CStr, _set_length: i32) {}
+        fn add_entry_set(&mut self, _set_id: &str, _set_length: i32) {}
         fn add_entry_to_set(
             &mut self,
-            _cred_id: &CStr,
-            _icon: Option<&[u8]>,
-            _title: Option<&CStr>,
-            _subtitle: Option<&CStr>,
-            _disclaimer: Option<&CStr>,
-            _warning: Option<&CStr>,
-            _metadata: Option<&CStr>,
-            _set_id: &CStr,
+            _cred_id: &str,
+            _icon: &[u8],
+            _title: &str,
+            _subtitle: &str,
+            _disclaimer: &str,
+            _warning: &str,
+            _metadata: &str,
+            _set_id: &str,
             _set_index: i32,
         ) {
         }
         fn add_field_to_entry_set(
             &mut self,
-            _cred_id: &CStr,
-            _field_display_name: &CStr,
-            _field_display_value: Option<&CStr>,
-            _set_id: &CStr,
+            _cred_id: &str,
+            _field_display_name: &str,
+            _field_display_value: &str,
+            _set_id: &str,
             _set_index: i32,
         ) {
         }
         fn add_payment_entry_to_set_v2(
             &mut self,
-            _cred_id: &CStr,
-            _merchant_name: Option<&CStr>,
-            _payment_method_name: Option<&CStr>,
-            _payment_method_subtitle: Option<&CStr>,
-            _payment_method_icon: Option<&[u8]>,
-            _transaction_amount: Option<&CStr>,
-            _bank_icon: Option<&[u8]>,
-            _payment_provider_icon: Option<&[u8]>,
-            _additional_info: Option<&CStr>,
-            _metadata: Option<&CStr>,
-            _set_id: &CStr,
+            _cred_id: &str,
+            _merchant_name: &str,
+            _payment_method_name: &str,
+            _payment_method_subtitle: &str,
+            _payment_method_icon: &[u8],
+            _transaction_amount: &str,
+            _bank_icon: &[u8],
+            _payment_provider_icon: &[u8],
+            _additional_info: &str,
+            _metadata: &str,
+            _set_id: &str,
             _set_index: i32,
         ) {
         }
         fn add_inline_issuance_entry(
             &mut self,
-            _cred_id: &CStr,
-            _icon: Option<&[u8]>,
-            _title: Option<&CStr>,
-            _subtitle: Option<&CStr>,
+            _cred_id: &str,
+            _icon: &[u8],
+            _title: &str,
+            _subtitle: &str,
         ) {
         }
         fn add_metadata_display_text_to_entry_set(
             &mut self,
-            _cred_id: &CStr,
-            _metadata_display_text: &CStr,
-            _set_id: &CStr,
+            _cred_id: &str,
+            _metadata_display_text: &str,
+            _set_id: &str,
             _set_index: i32,
         ) {
         }
@@ -264,9 +250,9 @@ mod test {
 
         assert_eq!(credman.added_entries.len(), 1);
         let entry = &credman.added_entries[0];
-        assert_eq!(entry.entry_id, c"C");
-        assert_eq!(entry.title, c"TTTT");
-        assert_eq!(entry.subtitle, c"SSSSS");
+        assert_eq!(entry.entry_id, "C");
+        assert_eq!(entry.title, "TTTT");
+        assert_eq!(entry.subtitle, "SSSSS");
         assert!(entry.icon.is_empty());
     }
 
