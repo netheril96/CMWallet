@@ -11,3 +11,7 @@ pub mod openid4vp;
 pub mod openid4vp_models;
 #[cfg(target_arch = "wasm32")]
 pub mod simple_allocator;
+
+pub mod reporter;
+#[cfg(test)]
+pub mod test_utils;
