@@ -800,7 +800,7 @@ mod test {
 
     fn run_test_impl(test_name: &str, custom_registry: Option<&str>) {
         let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
-        let testdata_dir = std::path::PathBuf::from(manifest_dir).join("../matcher/testdata");
+        let testdata_dir = std::path::PathBuf::from(manifest_dir).join("testdata");
 
         let registry_json = match custom_registry {
             Some(s) => s.to_string(),
@@ -886,7 +886,7 @@ mod test {
     #[test]
     fn tc37_wasm_metadata_text() {
         let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
-        let testdata_dir = std::path::PathBuf::from(manifest_dir).join("../matcher/testdata");
+        let testdata_dir = std::path::PathBuf::from(manifest_dir).join("testdata");
         let mut registry_json =
             std::fs::read_to_string(testdata_dir.join("registry.json")).unwrap();
         let target = "\"title\": \"John's Driving License\"";
