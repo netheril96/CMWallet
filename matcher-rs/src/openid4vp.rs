@@ -1,9 +1,9 @@
 use crate::base64url::decode_base64url;
 use crate::credman::CredmanApi;
 pub use crate::openid4vp_models::*;
+use crate::reporter::report_match_result;
 use nanoserde::DeJson;
 use std::borrow::Cow;
-use crate::reporter::report_match_result;
 
 fn parse_protocol_request_data<'a>(
     pr: &'a ProtocolRequest,
@@ -121,20 +121,15 @@ pub fn openid4vp_main(credman: &mut impl CredmanApi) -> Result<(), Box<dyn std::
     Ok(())
 }
 
-
-
-
 #[cfg(test)]
 mod test {
     use crate::test_utils::*;
-
-
 
     macro_rules! define_test {
         ($func_name:ident, $test_name:expr) => {
             #[test]
             fn $func_name() {
-                run_test_impl($test_name, None);
+                run_openid4vp_test($test_name, None);
             }
         };
     }
@@ -182,7 +177,10 @@ mod test {
     define_test!(tc35_wasm_add_entry_to_set, "TC35_WasmAddEntryToSet");
     define_test!(tc36_wasm_payment_v2, "TC36_WasmPaymentV2");
     define_test!(tc38_dcql_cartesian_product, "TC38_DcqlCartesianProduct");
-    define_test!(tc39_dcql_complex_cartesian_product, "TC39_DcqlComplexCartesianProduct");
+    define_test!(
+        tc39_dcql_complex_cartesian_product,
+        "TC39_DcqlComplexCartesianProduct"
+    );
 
     #[test]
     fn tc37_wasm_metadata_text() {
@@ -194,6 +192,6 @@ mod test {
         if let Some(pos) = registry_json.find(target) {
             registry_json.insert_str(pos, "\"metadata_display_text\": \"Verified Member\", ");
         }
-        run_test_impl("TC37_WasmMetadataText", Some(&registry_json));
+        run_openid4vp_test("TC37_WasmMetadataText", Some(&registry_json));
     }
 }

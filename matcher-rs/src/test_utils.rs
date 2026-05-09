@@ -1,3 +1,4 @@
+#![cfg(test)]
 use crate::json_value::DeterministicMap;
 use crate::credman::CredmanApi;
 use crate::openid4vp::openid4vp_main;
@@ -39,6 +40,16 @@ pub struct FakeEntry {
     pub additional_info: String,
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct AddedEntry {
+    pub entry_id: String,
+    pub icon: Vec<u8>,
+    pub title: String,
+    pub subtitle: String,
+    pub disclaimer: String,
+    pub warning: String,
+}
+
 #[derive(SerJson, DeJson, PartialEq, Debug, Clone)]
 pub struct FakeEntrySet {
     #[nserde(rename = "setId")]
@@ -63,6 +74,7 @@ pub struct FakeCredman {
     pub wasm_version: u32,
     pub request_json: String,
     pub credentials_blob: Vec<u8>,
+    pub added_entries: Vec<AddedEntry>,
 }
 
 impl FakeCredman {
@@ -73,6 +85,7 @@ impl FakeCredman {
             wasm_version: 9999,
             request_json: String::new(),
             credentials_blob: Vec::new(),
+            added_entries: Vec::new(),
         }
     }
 }
@@ -89,13 +102,21 @@ impl CredmanApi for FakeCredman {
     }
     fn add_string_id_entry(
         &mut self,
-        _id: &str,
-        _icon: &[u8],
-        _title: &str,
-        _subtitle: &str,
-        _disclaimer: &str,
-        _warning: &str,
+        id: &str,
+        icon: &[u8],
+        title: &str,
+        subtitle: &str,
+        disclaimer: &str,
+        warning: &str,
     ) {
+        self.added_entries.push(AddedEntry {
+            entry_id: id.to_string(),
+            icon: icon.to_vec(),
+            title: title.to_string(),
+            subtitle: subtitle.to_string(),
+            disclaimer: disclaimer.to_string(),
+            warning: warning.to_string(),
+        });
     }
     fn add_entry_set(&mut self, set_id: &str, set_length: i32) {
         let s_id = set_id.to_string();
@@ -258,7 +279,7 @@ pub fn create_registry_blob(json_str: &str) -> Vec<u8> {
     blob
 }
 
-pub fn run_test_impl(test_name: &str, custom_registry: Option<&str>) {
+pub fn run_openid4vp_test(test_name: &str, custom_registry: Option<&str>) {
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
     let testdata_dir = std::path::PathBuf::from(manifest_dir).join("testdata");
 

@@ -90,119 +90,25 @@ pub fn issuance_main(credman: &mut impl CredmanApi) -> Result<(), Box<dyn std::e
 mod test {
     use super::*;
 
-    struct AddedEntry {
-        entry_id: String,
-        icon: Vec<u8>,
-        title: String,
-        subtitle: String,
-        disclaimer: String,
-        warning: String,
-    }
+    use crate::test_utils::*;
 
-    struct FakeCredman {
-        request_json: &'static str,
-        registered_json: &'static str,
-        icon: Vec<u8>,
-        added_entries: Vec<AddedEntry>,
-    }
-
-    impl CredmanApi for FakeCredman {
-        fn get_request_buffer(&self) -> Vec<u8> {
-            self.request_json.as_bytes().into()
-        }
-
-        fn get_registered_data(&self) -> Vec<u8> {
-            let mut result = Vec::with_capacity(4 + self.icon.len() + self.registered_json.len());
-            result.extend_from_slice(&u32::to_le_bytes(4 + self.icon.len() as u32));
-            result.extend_from_slice(&self.icon);
-            result.extend_from_slice(self.registered_json.as_bytes());
-            result
-        }
-
-        fn get_wasm_version(&self) -> u32 {
-            9999
-        }
-
-        fn add_string_id_entry(
-            &mut self,
-            entry_id: &str,
-            icon: &[u8],
-            title: &str,
-            subtitle: &str,
-            disclaimer: &str,
-            warning: &str,
-        ) {
-            self.added_entries.push(AddedEntry {
-                entry_id: entry_id.to_string(),
-                icon: icon.to_vec(),
-                title: title.to_string(),
-                subtitle: subtitle.to_string(),
-                disclaimer: disclaimer.to_string(),
-                warning: warning.to_string(),
-            });
-        }
-
-        fn add_entry_set(&mut self, _set_id: &str, _set_length: i32) {}
-        fn add_entry_to_set(
-            &mut self,
-            _cred_id: &str,
-            _icon: &[u8],
-            _title: &str,
-            _subtitle: &str,
-            _disclaimer: &str,
-            _warning: &str,
-            _metadata: &str,
-            _set_id: &str,
-            _set_index: i32,
-        ) {
-        }
-        fn add_field_to_entry_set(
-            &mut self,
-            _cred_id: &str,
-            _field_display_name: &str,
-            _field_display_value: &str,
-            _set_id: &str,
-            _set_index: i32,
-        ) {
-        }
-        fn add_payment_entry_to_set_v2(
-            &mut self,
-            _cred_id: &str,
-            _merchant_name: &str,
-            _payment_method_name: &str,
-            _payment_method_subtitle: &str,
-            _payment_method_icon: &[u8],
-            _transaction_amount: &str,
-            _bank_icon: &[u8],
-            _payment_provider_icon: &[u8],
-            _additional_info: &str,
-            _metadata: &str,
-            _set_id: &str,
-            _set_index: i32,
-        ) {
-        }
-        fn add_inline_issuance_entry(
-            &mut self,
-            _cred_id: &str,
-            _icon: &[u8],
-            _title: &str,
-            _subtitle: &str,
-        ) {
-        }
-        fn add_metadata_display_text_to_entry_set(
-            &mut self,
-            _cred_id: &str,
-            _metadata_display_text: &str,
-            _set_id: &str,
-            _set_index: i32,
-        ) {
-        }
+    fn make_fake_credman(request_json: &'static str, registered_json: &'static str, icon: Vec<u8>) -> FakeCredman {
+        let mut credman = FakeCredman::new();
+        credman.request_json = request_json.to_string();
+        
+        let mut result = Vec::with_capacity(4 + icon.len() + registered_json.len());
+        result.extend_from_slice(&u32::to_le_bytes(4 + icon.len() as u32));
+        result.extend_from_slice(&icon);
+        result.extend_from_slice(registered_json.as_bytes());
+        credman.credentials_blob = result;
+        
+        credman
     }
 
     #[test]
     fn match_case1() {
-        let mut credman = FakeCredman {
-            request_json: r#"
+        let mut credman = make_fake_credman(
+            r#"
 {
   "requests": [
     {
@@ -222,7 +128,7 @@ mod test {
     }
   ]
 }"#,
-            registered_json: r#"
+            r#"
       {
         "entry_id": "C",
         "title": "TTTT",
@@ -242,9 +148,8 @@ mod test {
           }
         }
       }"#,
-            icon: Vec::new(),
-            added_entries: Vec::new(),
-        };
+            Vec::new(),
+        );
 
         issuance_main(&mut credman).unwrap();
 
@@ -258,8 +163,8 @@ mod test {
 
     #[test]
     fn invalid_json() {
-        let mut credman = FakeCredman {
-            request_json: r#"
+        let mut credman = make_fake_credman(
+            r#"
 {
   "requests": [
     {
@@ -279,16 +184,15 @@ mod test {
     }
   ]
 "#,
-            registered_json: r#"
+            r#"
       {
         "entry_id": "C",
         "title": "TTTT",
         "subtitle": "SSSSS",
         "icon": [0, 0],
         "filter": {"Unit": {}}"#,
-            icon: Vec::new(),
-            added_entries: Vec::new(),
-        };
+            Vec::new(),
+        );
 
         let errmsg = format!("{:?}", issuance_main(&mut credman).unwrap_err());
         assert!(
@@ -298,8 +202,8 @@ mod test {
 
     #[test]
     fn nomatch_case1() {
-        let mut credman = FakeCredman {
-            request_json: r#"
+        let mut credman = make_fake_credman(
+            r#"
 {
   "requests": [
     {
@@ -319,7 +223,7 @@ mod test {
     }
   ]
 }"#,
-            registered_json: r#"
+            r#"
 {
   "entry_id": "C",
   "title": "TTTT",
@@ -359,9 +263,8 @@ mod test {
     }
   }
 }"#,
-            icon: Vec::new(),
-            added_entries: Vec::new(),
-        };
+            Vec::new(),
+        );
 
         issuance_main(&mut credman).unwrap();
 
@@ -370,8 +273,8 @@ mod test {
 
     #[test]
     fn match_mdoc_doctype() {
-        let mut credman = FakeCredman {
-            request_json: r#"
+        let mut credman = make_fake_credman(
+            r#"
 {
   "requests": [
     {
@@ -397,7 +300,7 @@ mod test {
     }
   ]
 }"#,
-            registered_json: r#"
+            r#"
 {
   "entry_id": "C",
   "title": "TTTT",
@@ -435,9 +338,8 @@ mod test {
     }
   }
 }"#,
-            icon: Vec::new(),
-            added_entries: Vec::new(),
-        };
+            Vec::new(),
+        );
 
         issuance_main(&mut credman).unwrap();
 
