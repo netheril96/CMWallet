@@ -121,29 +121,7 @@ pub fn openid4vp_main(credman: &mut impl CredmanApi) -> Result<(), Box<dyn std::
     Ok(())
 }
 
-fn report_credential_set_length(
-    credman: &mut impl CredmanApi,
-    set_id: &str,
-    curr_length: usize,
-    curr_set_idx: usize,
-    matched_credential_sets: &[Vec<MatchedCredentialSetInfo<'_>>],
-) {
-    if curr_set_idx == matched_credential_sets.len() {
-        credman.add_entry_set(set_id, curr_length as i32);
-        return;
-    }
 
-    let options = &matched_credential_sets[curr_set_idx];
-    for opt in options {
-        report_credential_set_length(
-            credman,
-            set_id,
-            curr_length + opt.matched_credential_ids.len(),
-            curr_set_idx + 1,
-            matched_credential_sets,
-        );
-    }
-}
 
 fn report_payment_transaction_entry(
     credman: &mut impl CredmanApi,
@@ -315,61 +293,7 @@ fn report_matched_credential(
     Ok(())
 }
 
-fn report_matched_credential_set(
-    credman: &mut impl CredmanApi,
-    set_id: &str,
-    curr_set_idx: usize,
-    matched_credential_sets: &[Vec<MatchedCredentialSetInfo<'_>>],
-    curr_doc_idx: &mut i32,
-    wasm_version: u32,
-    matched_docs: &DeterministicMap<&str, DcqlMatchedCredentialEntry<'_>>,
-    request_id: usize,
-    creds_blob: &[u8],
-    transaction_info: &Option<(Vec<String>, String, String, String)>,
-) -> Result<(), Box<dyn std::error::Error>> {
-    if curr_set_idx >= matched_credential_sets.len() {
-        return Ok(());
-    }
 
-    let options = &matched_credential_sets[curr_set_idx];
-    for opt in options {
-        let mut doc_idx = *curr_doc_idx;
-        for cred_id in &opt.matched_credential_ids {
-            let Some(doc) = matched_docs.get(*cred_id) else {
-                continue;
-            };
-
-            report_matched_credential(
-                credman,
-                wasm_version,
-                doc,
-                cred_id,
-                doc_idx,
-                request_id,
-                set_id,
-                Some(&opt.set_id),
-                Some(&opt.option_id),
-                creds_blob,
-                transaction_info,
-            )?;
-            doc_idx += 1;
-        }
-
-        report_matched_credential_set(
-            credman,
-            set_id,
-            curr_set_idx + 1,
-            matched_credential_sets,
-            &mut doc_idx,
-            wasm_version,
-            matched_docs,
-            request_id,
-            creds_blob,
-            transaction_info,
-        )?;
-    }
-    Ok(())
-}
 
 fn extract_transaction_info(
     data_json: &OpenId4VpData,
@@ -452,77 +376,94 @@ fn report_match_result(
 
     if !res.matched_credential_sets.is_empty() {
         let transaction_info = extract_transaction_info(data_json)?;
-        let first_set = &res.matched_credential_sets[0];
-        log::debug!(
-            "Reporting {} options from the first matched set",
-            first_set.len()
-        );
-        for opt in first_set {
-            let set_id_str = if !opt.set_id.is_empty() {
-                format!(
-                    "req:{};set:{};option:{}",
-                    request_idx, opt.set_id, opt.option_id
-                )
-            } else {
-                format!("req:{};null", request_idx)
-            };
-            log::debug!("Set ID: {}", set_id_str);
-
-            if wasm_version > 1 {
-                log::trace!("Reporting credential set lengths for {}", set_id_str);
-                report_credential_set_length(
-                    credman,
-                    &set_id_str,
-                    opt.matched_credential_ids.len(),
-                    1,
-                    &res.matched_credential_sets,
-                );
-            }
-
-            let mut doc_idx = 0;
-            for cred_id in &opt.matched_credential_ids {
-                let Some(doc) = res.matched_credentials.get(*cred_id) else {
-                    continue;
+        
+        fn report_combinations(
+            credman: &mut impl CredmanApi,
+            wasm_version: u32,
+            request_idx: usize,
+            sets: &[Vec<MatchedCredentialSetInfo<'_>>],
+            current_combination: &mut Vec<usize>,
+            matched_credentials: &DeterministicMap<&str, DcqlMatchedCredentialEntry<'_>>,
+            creds_blob: &[u8],
+            transaction_info: &Option<(Vec<String>, String, String, String)>,
+        ) -> Result<(), Box<dyn std::error::Error>> {
+            if current_combination.len() == sets.len() {
+                let mut set_id_parts = vec![format!("req:{}", request_idx)];
+                let mut total_length = 0;
+                
+                for (i, &opt_idx) in current_combination.iter().enumerate() {
+                    let opt = &sets[i][opt_idx];
+                    if !opt.set_id.is_empty() {
+                        set_id_parts.push(format!("set:{};option:{}", opt.set_id, opt.option_id));
+                    }
+                    total_length += opt.matched_credential_ids.len();
+                }
+                let set_id_str = if set_id_parts.len() == 1 {
+                    format!("req:{};null", request_idx)
+                } else {
+                    set_id_parts.join(";")
                 };
-
-                report_matched_credential(
+                
+                if wasm_version > 1 {
+                    credman.add_entry_set(&set_id_str, total_length as i32);
+                }
+                
+                let mut doc_idx = 0;
+                for (i, &opt_idx) in current_combination.iter().enumerate() {
+                    let opt = &sets[i][opt_idx];
+                    for cred_id in &opt.matched_credential_ids {
+                        let Some(doc) = matched_credentials.get(*cred_id) else {
+                            continue;
+                        };
+                        report_matched_credential(
+                            credman,
+                            wasm_version,
+                            doc,
+                            cred_id,
+                            doc_idx,
+                            request_idx,
+                            &set_id_str,
+                            Some(&opt.set_id),
+                            Some(&opt.option_id),
+                            creds_blob,
+                            transaction_info,
+                        )?;
+                        doc_idx += 1;
+                    }
+                }
+                return Ok(());
+            }
+            
+            let next_set_idx = current_combination.len();
+            for opt_idx in 0..sets[next_set_idx].len() {
+                current_combination.push(opt_idx);
+                report_combinations(
                     credman,
                     wasm_version,
-                    doc,
-                    cred_id,
-                    doc_idx,
                     request_idx,
-                    &set_id_str,
-                    if opt.set_id.is_empty() {
-                        None
-                    } else {
-                        Some(&opt.set_id)
-                    },
-                    if opt.option_id.is_empty() {
-                        None
-                    } else {
-                        Some(&opt.option_id)
-                    },
+                    sets,
+                    current_combination,
+                    matched_credentials,
                     creds_blob,
-                    &transaction_info,
+                    transaction_info,
                 )?;
-                doc_idx += 1;
+                current_combination.pop();
             }
-
-            let mut next_doc_idx = doc_idx;
-            report_matched_credential_set(
-                credman,
-                &set_id_str,
-                1,
-                &res.matched_credential_sets,
-                &mut next_doc_idx,
-                wasm_version,
-                &res.matched_credentials,
-                request_idx,
-                creds_blob,
-                &transaction_info,
-            )?;
+            
+            Ok(())
         }
+        
+        let mut current_combination = Vec::new();
+        report_combinations(
+            credman,
+            wasm_version,
+            request_idx,
+            &res.matched_credential_sets,
+            &mut current_combination,
+            &res.matched_credentials,
+            creds_blob,
+            &transaction_info,
+        )?;
     }
 
     if let Some(inline) = &res.inline_issuance {
@@ -828,6 +769,11 @@ mod test {
 
         let expected_result: FakeCredmanResult = DeJson::deserialize_json(&expected_json).unwrap();
 
+        if result != expected_result {
+            let actual_json = nanoserde::SerJson::serialize_json(&result);
+            let _ = std::fs::write(testdata_dir.join(format!("{}_actual.json", test_name)), actual_json);
+        }
+
         assert_eq!(result, expected_result, "Test {} failed", test_name);
     }
 
@@ -882,6 +828,8 @@ mod test {
     define_test!(tc34_extract_payment_generic, "TC34_ExtractPaymentGeneric");
     define_test!(tc35_wasm_add_entry_to_set, "TC35_WasmAddEntryToSet");
     define_test!(tc36_wasm_payment_v2, "TC36_WasmPaymentV2");
+    define_test!(tc38_dcql_cartesian_product, "TC38_DcqlCartesianProduct");
+    define_test!(tc39_dcql_complex_cartesian_product, "TC39_DcqlComplexCartesianProduct");
 
     #[test]
     fn tc37_wasm_metadata_text() {
