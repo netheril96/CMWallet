@@ -1,7 +1,7 @@
 CXX = g++
 CC = gcc
 CXXFLAGS = -std=c++17 -Wall -Wextra -g -I. -I/usr/include/doctest -I/usr/include/nlohmann
-CFLAGS = -Wall -Wextra -g -I.
+CFLAGS = -Wall -Wextra -g -I. -Wno-unused-variable -Wno-unused-but-set-variable -Wno-format-overflow
 
 # Common objects
 COMMON_OBJS = dcql.o openid4vp1_0.o base64.o cJSON/cJSON.o issuance/provision.o
@@ -9,6 +9,9 @@ COMMON_OBJS = dcql.o openid4vp1_0.o base64.o cJSON/cJSON.o issuance/provision.o
 # Tests
 test_runner: test_runner.o dcql.o openid4vp1_0.o base64.o cJSON/cJSON.o
 	$(CXX) $(CXXFLAGS) -o $@ $^
+
+test: test_runner
+	./test_runner
 
 test_runner.o: test_runner.cc
 	$(CXX) $(CXXFLAGS) -c $< -o $@
@@ -30,3 +33,5 @@ issuance/provision.o: issuance/provision.c
 
 clean:
 	rm -f *.o cJSON/*.o issuance/*.o test_runner
+
+.PHONY: test clean

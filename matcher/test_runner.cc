@@ -158,7 +158,7 @@ void AddEntrySet(const char* set_id, int set_length) {
     FakeCredman::GetInstance().entrySets[s_id] = {s_id, set_length, {}};
 }
 
-void AddEntryToSet(const char* cred_id, const char* icon, size_t icon_len, const char* title, const char* subtitle, const char* disclaimer, const char* warning, const char* metadata, const char* set_id, int set_index) {
+void AddEntryToSet(const char* cred_id, const char* /*icon*/, size_t /*icon_len*/, const char* title, const char* subtitle, const char* disclaimer, const char* warning, const char* /*metadata*/, const char* set_id, int set_index) {
     FakeEntry entry;
     entry.credId = cred_id ? cred_id : "";
     entry.type = EntryType::Verification;
@@ -178,7 +178,7 @@ void AddFieldToEntrySet(const char* cred_id, const char* field_display_name, con
     FakeCredman::GetInstance().entrySets[s_id].entries[std::to_string(set_index)][c_id].fields.push_back({f_name, f_val});
 }
 
-void AddPaymentEntryToSetV2(const char* cred_id, const char* merchant_name, const char* payment_method_name, const char* payment_method_subtitle, const char* payment_method_icon, size_t payment_method_icon_len, const char* transaction_amount, const char* bank_icon, size_t bank_icon_len, const char* payment_provider_icon, size_t payment_provider_icon_len, const char* additional_info, const char* metadata, const char* set_id, int set_index) {
+void AddPaymentEntryToSetV2(const char* cred_id, const char* merchant_name, const char* /*payment_method_name*/, const char* /*payment_method_subtitle*/, const char* /*payment_method_icon*/, size_t /*payment_method_icon_len*/, const char* transaction_amount, const char* /*bank_icon*/, size_t /*bank_icon_len*/, const char* /*payment_provider_icon*/, size_t /*payment_provider_icon_len*/, const char* additional_info, const char* /*metadata*/, const char* set_id, int set_index) {
     FakeEntry entry;
     entry.credId = cred_id ? cred_id : "";
     entry.type = EntryType::Payment;
@@ -200,7 +200,7 @@ void AddMetadataDisplayTextToEntrySet(const char *cred_id, const char *metadata_
     FakeCredman::GetInstance().entrySets[s_id].entries[std::to_string(set_index)][c_id].metadata_display_text = m_text;
 }
 
-void AddInlineIssuanceEntry(const char* cred_id, const char* icon, size_t icon_len, const char* title, const char* subtitle) {
+void AddInlineIssuanceEntry(const char* cred_id, const char* /*icon*/, size_t /*icon_len*/, const char* title, const char* subtitle) {
     FakeEntry entry;
     entry.credId = cred_id ? cred_id : "";
     entry.type = EntryType::InlineIssuance;
